@@ -3,14 +3,239 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
+  id        String    @id @default(uuid())
+  username  String    @unique
   password  String
+  levelId   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relationships
+  level     Level      @relation(fields: [levelId], references: [id])
+  students  Student[]
+  schools   School[]
+  employers Employer[]
+
+  @@map("users")
+}
+
+model Level {
+  id        String    @id @default(uuid())
+  levelname String    @unique // student, school, employer
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relationships
+  users     User[]
+
+  @@map("levels")
+}
+
+model Role {
+  id        String    @id @default(uuid())
+  rolename  String    @unique // principal, viceprincipal, student affair, members, treasurer, secretaris, president, vice president
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relationships
+  students  Student[]
+  schools   School[]
+  employers Employer[]
+
+  @@map("roles")
+}
+
+model Grade {
+  id        String    @id @default(uuid())
+  gradename String    @unique // VII, VIII, IX, X, XI, XII
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relationships
+  classes   Class[]
+
+  @@map("grades")
+}
+
+model Major {
+  id        String    @id @default(uuid())
+  majorname String    @unique // Akuntansi Keuangan dan Lembaga, Bisnis Daring Pemasaran, Rekayasa Perangkat Lunak
+  majorcode String    @unique // AKL, BDP, RPL
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relationships
+  classes   Class[]
+
+  @@map("majors")
+}
+
+model Class {
+  id        String    @id @default(uuid())
+  classname String    @unique
+  gradeid   String
+  majorid   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relationships
+  grade     Grade     @relation(fields: [gradeid], references: [id])
+  major     Major     @relation(fields: [majorid], references: [id])
+  students  Student[]
+
+  @@map("classes")
+}
+
+model Student {
+  id        String    @id @default(uuid())
+  userid    String
+  email     String    @unique
+  classid   String
+  roleid    String?   // null by default
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relationships
+  user      User      @relation(fields: [userid], references: [id], onDelete: Cascade)
+  class     Class     @relation(fields: [classid], references: [id])
+  role      Role?     @relation(fields: [roleid], references: [id])
+
+  @@map("students")
+}
+
+model School {
+  id        String    @id @default(uuid())
+  userid    String
+  email     String    @unique
+  roleid    String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relationships
+  user      User      @relation(fields: [userid], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleid], references: [id])
+
+  @@map("schools")
+}
+
+model Employer {
+  id        String    @id @default(uuid())
+  userid    String
+  email     String    @unique
+  roleid    String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relationships
+  user      User      @relation(fields: [userid], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleid], references: [id])
+
+  @@map("employers")
+}
+
+model System {
+  id            String    @id @default(uuid())
+  systemname    String
+  systemlogo    String?
+  systemfavicon String?
+  systemaddress String?
+  systemcontact String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("systems")
+}
+
+model Period {
+  id                 String    @id @default(uuid())
+  yearLabel          String    @unique
+  status             String
+  voteStartDate      String?
+  voteEndDate        String?
+  electedCandidateId String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@map("periods")
+}
+
+model Candidate {
+  id                  String    @id @default(uuid())
+  paslonNo            String
+  name                String
+  presidentId         String
+  vicePresidentId     String
+  presidentName       String
+  vicePresidentName   String
+  presidentClass      String
+  vicePresidentClass  String
+  classes             String
+  visi                String
+  misi                String?
+  photo               String?
+  periodId            String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@map("candidates")
+}
+
+model Vote {
+  id          String   @id @default(uuid())
+  userId      String
+  periodId    String
+  candidateId String
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, periodId])
+  @@map("votes")
+}
+
+model Proker {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  targetDate  String
+  status      String
+  periodId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("prokers")
+}
+
+model KasClaim {
+  id        String   @id @default(uuid())
+  monthKey  String
+  classId   String
+  claimed   Boolean  @default(true)
   createdAt DateTime @default(now())
+
+  @@unique([monthKey, classId])
+  @@map("kas_claims")
+}
+
+model KasExpense {
+  id          String   @id @default(uuid())
+  description String
+  amount      Float
+  date        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("kas_expenses")
 }
