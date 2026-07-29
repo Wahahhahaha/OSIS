@@ -209,28 +209,7 @@ export const authApi = {
     const response = await api.post(`/admin/periods/${periodId}/elected-pair`, { candidateId });
     return response.data;
   },
-
-  // Kas OSIS
-  getKasClaims: async (): Promise<any[]> => {
-    const response = await api.get('/admin/kas-claims');
-    return response.data;
-  },
-  claimKas: async (data: { monthKey: string; classId: string; claimed: boolean }): Promise<any> => {
-    const response = await api.post('/admin/kas-claims', data);
-    return response.data;
-  },
-  getKasExpenses: async (): Promise<any[]> => {
-    const response = await api.get('/admin/kas-expenses');
-    return response.data;
-  },
-  createKasExpense: async (data: { description: string; amount: number; date: string }): Promise<any> => {
-    const response = await api.post('/admin/kas-expenses', data);
-    return response.data;
-  },
-  deleteKasExpense: async (id: string): Promise<any> => {
-    const response = await api.delete(`/admin/kas-expenses/${id}`);
-    return response.data;
-  },
 };
 
 export default api;
+

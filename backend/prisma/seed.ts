@@ -4,9 +4,12 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Hash password
   const salt = await bcrypt.genSalt(10);
-  const defaultPassword = await bcrypt.hash('password123', salt);
+
+  // Helper to hash password matching the username
+  const hashPassword = async (username: string) => {
+    return bcrypt.hash(username, salt);
+  };
 
   console.log('Seeding levels...');
   const studentLevel = await prisma.level.upsert({
@@ -38,6 +41,8 @@ async function main() {
     'secretaris',
     'president',
     'vice president',
+    'teacher',
+    'admin',
   ];
   const roles: Record<string, any> = {};
   for (const name of roleNames) {
@@ -84,84 +89,137 @@ async function main() {
   }
 
   console.log('Seeding classes...');
-  const sampleClass = await prisma.class.upsert({
-    where: { classname: 'X RPL 1' },
-    update: {},
-    create: {
-      classname: 'X RPL 1',
-      gradeid: grades['X'].id,
-      majorid: majors['RPL'].id,
-    },
-  });
+  // The user requested classes where classname is exactly 'A':
+  // A (Grade: VIII, Major: AKL)
+  // A (Grade: VIII, Major: BDP)
+  // A (Grade: VIII, Major: RPL)
+  // A (Grade: IX, Major: AKL)
+  // A (Grade: IX, Major: BDP)
+  // A (Grade: IX, Major: RPL)
+  // A (Grade: XI, Major: AKL)
+  // A (Grade: XI, Major: BDP)
+  // A (Grade: XI, Major: RPL)
+  const classDefinitions = [
+    { classname: 'A', gradeName: 'VIII', majorCode: 'AKL' },
+    { classname: 'A', gradeName: 'VIII', majorCode: 'BDP' },
+    { classname: 'A', gradeName: 'VIII', majorCode: 'RPL' },
+    { classname: 'A', gradeName: 'IX', majorCode: 'AKL' },
+    { classname: 'A', gradeName: 'IX', majorCode: 'BDP' },
+    { classname: 'A', gradeName: 'IX', majorCode: 'RPL' },
+    { classname: 'A', gradeName: 'XI', majorCode: 'AKL' },
+    { classname: 'A', gradeName: 'XI', majorCode: 'BDP' },
+    { classname: 'A', gradeName: 'XI', majorCode: 'RPL' },
+  ];
 
-  console.log('Seeding users...');
-  // 1. Student User
-  const studentUser = await prisma.user.upsert({
-    where: { username: 'student' },
-    update: { password: defaultPassword },
-    create: {
-      username: 'student',
-      password: defaultPassword,
-      levelId: studentLevel.id,
-    },
-  });
+  const seededClasses: any[] = [];
+  for (const def of classDefinitions) {
+    const cls = await prisma.class.upsert({
+      where: {
+        classname_gradeid_majorid: {
+          classname: def.classname,
+          gradeid: grades[def.gradeName].id,
+          majorid: majors[def.majorCode].id,
+        }
+      },
+      update: {},
+      create: {
+        classname: def.classname,
+        gradeid: grades[def.gradeName].id,
+        majorid: majors[def.majorCode].id,
+      },
+    });
+    seededClasses.push(cls);
+  }
 
-  await prisma.student.upsert({
-    where: { email: 'student@example.com' },
-    update: {
-      userid: studentUser.id,
-      classid: sampleClass.id,
-      roleid: null,
-    },
-    create: {
-      userid: studentUser.id,
-      email: 'student@example.com',
-      classid: sampleClass.id,
-      roleid: null,
-    },
-  });
+  console.log('Seeding periods...');
+  const periodData = [
+    { yearLabel: '2024/2025', status: 'INACTIVE' },
+    { yearLabel: '2025/2026', status: 'INACTIVE' },
+    { yearLabel: '2026/2027', status: 'ACTIVE' },
+  ];
+  const seededPeriods: Record<string, any> = {};
+  for (const p of periodData) {
+    const today = new Date();
+    const voteStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    const voteEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2);
 
-  // 2. School User
-  const schoolUser = await prisma.user.upsert({
-    where: { username: 'school' },
-    update: { password: defaultPassword },
+    seededPeriods[p.yearLabel] = await prisma.period.upsert({
+      where: { yearLabel: p.yearLabel },
+      update: { status: p.status },
+      create: {
+        yearLabel: p.yearLabel,
+        status: p.status,
+        voteStartDate: voteStart.toISOString(),
+        voteEndDate: voteEnd.toISOString(),
+      },
+    });
+  }
+
+  console.log('Seeding users (other users remain at 1, student has 20)...');
+
+  // 1. superadmin user (1 user, password same as username)
+  const superadminUser = await prisma.user.upsert({
+    where: { username: 'superadmin' },
+    update: { password: await hashPassword('superadmin') },
     create: {
-      username: 'school',
-      password: defaultPassword,
+      username: 'superadmin',
+      password: await hashPassword('superadmin'),
       levelId: schoolLevel.id,
     },
   });
-
   await prisma.school.upsert({
-    where: { email: 'school@example.com' },
-    update: {
-      userid: schoolUser.id,
-      roleid: roles['principal'].id,
-    },
+    where: { email: 'superadmin@example.com' },
+    update: { userid: superadminUser.id, roleid: roles['superadmin'].id },
     create: {
-      userid: schoolUser.id,
-      email: 'school@example.com',
-      roleid: roles['principal'].id,
+      userid: superadminUser.id,
+      email: 'superadmin@example.com',
+      roleid: roles['superadmin'].id,
     },
   });
 
-  // 3. Employer User
+  // Helper to seed a single school user
+  const seedSingleSchoolUser = async (username: string, email: string, roleId: string) => {
+    const user = await prisma.user.upsert({
+      where: { username },
+      update: { password: await hashPassword(username) },
+      create: {
+        username,
+        password: await hashPassword(username),
+        levelId: schoolLevel.id,
+      },
+    });
+    await prisma.school.upsert({
+      where: { email },
+      update: { userid: user.id, roleid: roleId },
+      create: {
+        userid: user.id,
+        email,
+        roleid: roleId,
+      },
+    });
+    return user;
+  };
+
+  // Seed remaining school users (1 for each role, password = username)
+  await seedSingleSchoolUser('teacher', 'teacher@example.com', roles['teacher'].id);
+  await seedSingleSchoolUser('admin', 'admin@example.com', roles['admin'].id);
+  await seedSingleSchoolUser('principal', 'principal@example.com', roles['principal'].id);
+  await seedSingleSchoolUser('viceprincipal', 'viceprincipal@example.com', roles['viceprincipal'].id);
+  await seedSingleSchoolUser('studentaffair', 'studentaffair@example.com', roles['student affair'].id);
+
+  // Seed default employer user (1 user, password = username)
   const employerUser = await prisma.user.upsert({
     where: { username: 'employer' },
-    update: { password: defaultPassword },
+    update: { password: await hashPassword('employer') },
     create: {
       username: 'employer',
-      password: defaultPassword,
+      password: await hashPassword('employer'),
       levelId: employerLevel.id,
     },
   });
-
   await prisma.employer.upsert({
     where: { email: 'employer@example.com' },
-    update: {
-      userid: employerUser.id,
-      roleid: roles['members'].id,
-    },
+    update: { userid: employerUser.id, roleid: roles['members'].id },
     create: {
       userid: employerUser.id,
       email: 'employer@example.com',
@@ -169,27 +227,146 @@ async function main() {
     },
   });
 
-  // 4. Superadmin User
-  const superadminUser = await prisma.user.upsert({
-    where: { username: 'superadmin' },
-    update: { password: defaultPassword },
+  // Seed 20 student users (username: student_1 to student_20, password same as username)
+  const studentUsers: any[] = [];
+  for (let i = 1; i <= 20; i++) {
+    const username = `student_${i}`;
+    const email = `student${i}@example.com`;
+
+    const user = await prisma.user.upsert({
+      where: { username },
+      update: { password: await hashPassword(username) },
+      create: {
+        username,
+        password: await hashPassword(username),
+        levelId: studentLevel.id,
+      },
+    });
+
+    // Round-robin distribution of classes
+    const targetClass = seededClasses[(i - 1) % seededClasses.length];
+    await prisma.student.upsert({
+      where: { email },
+      update: { userid: user.id, classid: targetClass.id, roleid: null },
+      create: {
+        userid: user.id,
+        email,
+        classid: targetClass.id,
+        roleid: null,
+      },
+    });
+    studentUsers.push(user);
+  }
+
+  // Seed standard student username just in case it maps to legacy pages
+  const defaultStudentUser = await prisma.user.upsert({
+    where: { username: 'student' },
+    update: { password: await hashPassword('student') },
     create: {
-      username: 'superadmin',
-      password: defaultPassword,
-      levelId: schoolLevel.id,
+      username: 'student',
+      password: await hashPassword('student'),
+      levelId: studentLevel.id,
+    },
+  });
+  await prisma.student.upsert({
+    where: { email: 'student@example.com' },
+    update: { userid: defaultStudentUser.id, classid: seededClasses[0].id, roleid: null },
+    create: {
+      userid: defaultStudentUser.id,
+      email: 'student@example.com',
+      classid: seededClasses[0].id,
+      roleid: null,
     },
   });
 
-  await prisma.school.upsert({
-    where: { email: 'superadmin@example.com' },
+  console.log('Seeding candidate OSIS (2 candidates in active period)...');
+  const activePeriod = seededPeriods['2026/2027'];
+
+  // Candidate 1: PASLON 01
+  // President: student_1, Vice President: student_2
+  const pres1 = studentUsers[0];
+  const vice1 = studentUsers[1];
+  const presStudent1 = await prisma.student.findFirst({ where: { userid: pres1.id }, include: { class: true } });
+  const viceStudent1 = await prisma.student.findFirst({ where: { userid: vice1.id }, include: { class: true } });
+  const presClass1 = presStudent1?.class?.classname || 'A';
+  const viceClass1 = viceStudent1?.class?.classname || 'A';
+
+  await prisma.candidate.upsert({
+    where: { id: 'cand_1' },
     update: {
-      userid: superadminUser.id,
-      roleid: roles['superadmin'].id,
+      paslonNo: '01',
+      name: 'PASLON 01',
+      presidentId: pres1.id,
+      vicePresidentId: vice1.id,
+      presidentName: pres1.username,
+      vicePresidentName: vice1.username,
+      presidentClass: presClass1,
+      vicePresidentClass: viceClass1,
+      classes: `${presClass1} & ${viceClass1}`,
+      visi: 'Membangun OSIS yang inovatif, transparan, dan inklusif untuk seluruh siswa.',
+      misi: 'Mengoptimalkan potensi akademik/non-akademik, menyelenggarakan kegiatan kreatif, dan menampung aspirasi siswa secara terbuka.',
+      photo: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=300&h=300&fit=crop',
+      periodId: activePeriod.id,
     },
     create: {
-      userid: superadminUser.id,
-      email: 'superadmin@example.com',
-      roleid: roles['superadmin'].id,
+      id: 'cand_1',
+      paslonNo: '01',
+      name: 'PASLON 01',
+      presidentId: pres1.id,
+      vicePresidentId: vice1.id,
+      presidentName: pres1.username,
+      vicePresidentName: vice1.username,
+      presidentClass: presClass1,
+      vicePresidentClass: viceClass1,
+      classes: `${presClass1} & ${viceClass1}`,
+      visi: 'Membangun OSIS yang inovatif, transparan, dan inklusif untuk seluruh siswa.',
+      misi: 'Mengoptimalkan potensi akademik/non-akademik, menyelenggarakan kegiatan kreatif, dan menampung aspirasi siswa secara terbuka.',
+      photo: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=300&h=300&fit=crop',
+      periodId: activePeriod.id,
+    },
+  });
+
+  // Candidate 2: PASLON 02
+  // President: student_3, Vice President: student_4
+  const pres2 = studentUsers[2];
+  const vice2 = studentUsers[3];
+  const presStudent2 = await prisma.student.findFirst({ where: { userid: pres2.id }, include: { class: true } });
+  const viceStudent2 = await prisma.student.findFirst({ where: { userid: vice2.id }, include: { class: true } });
+  const presClass2 = presStudent2?.class?.classname || 'A';
+  const viceClass2 = viceStudent2?.class?.classname || 'A';
+
+  await prisma.candidate.upsert({
+    where: { id: 'cand_2' },
+    update: {
+      paslonNo: '02',
+      name: 'PASLON 02',
+      presidentId: pres2.id,
+      vicePresidentId: vice2.id,
+      presidentName: pres2.username,
+      vicePresidentName: vice2.username,
+      presidentClass: presClass2,
+      vicePresidentClass: viceClass2,
+      classes: `${presClass2} & ${viceClass2}`,
+      visi: 'Mewujudkan lingkungan sekolah yang kolaboratif, peduli lingkungan, dan berkarakter mulia.',
+      misi: 'Meningkatkan program bakti sosial, menyelenggarakan perlombaan minat bakat, dan memperkuat kedisiplinan berkarakter.',
+      photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300&h=300&fit=crop',
+      periodId: activePeriod.id,
+    },
+    create: {
+      id: 'cand_2',
+      paslonNo: '02',
+      name: 'PASLON 02',
+      presidentId: pres2.id,
+      vicePresidentId: vice2.id,
+      presidentName: pres2.username,
+      vicePresidentName: vice2.username,
+      presidentClass: presClass2,
+      vicePresidentClass: viceClass2,
+      classes: `${presClass2} & ${viceClass2}`,
+      visi: 'Mewujudkan lingkungan sekolah yang kolaboratif, peduli lingkungan, dan berkarakter mulia.',
+      misi: 'Meningkatkan program bakti sosial, menyelenggarakan perlombaan minat bakat, dan memperkuat kedisiplinan berkarakter.',
+      photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=300&h=300&fit=crop',
+      periodId: activePeriod.id,
     },
   });
 

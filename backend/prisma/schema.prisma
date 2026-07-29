@@ -82,7 +82,7 @@ model Major {
 
 model Class {
   id        String    @id @default(uuid())
-  classname String    @unique
+  classname String
   gradeid   String
   majorid   String
   createdAt DateTime  @default(now())
@@ -94,6 +94,7 @@ model Class {
   major     Major     @relation(fields: [majorid], references: [id])
   students  Student[]
 
+  @@unique([classname, gradeid, majorid])
   @@map("classes")
 }
 
@@ -212,30 +213,9 @@ model Proker {
   targetDate  String
   status      String
   periodId    String
+  candidateId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@map("prokers")
-}
-
-model KasClaim {
-  id        String   @id @default(uuid())
-  monthKey  String
-  classId   String
-  claimed   Boolean  @default(true)
-  createdAt DateTime @default(now())
-
-  @@unique([monthKey, classId])
-  @@map("kas_claims")
-}
-
-model KasExpense {
-  id          String   @id @default(uuid())
-  description String
-  amount      Float
-  date        String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("kas_expenses")
 }

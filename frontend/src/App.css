@@ -191,6 +191,12 @@ body {
   transition: var(--transition);
 }
 
+select option, .form-input option {
+  background-color: var(--card-bg);
+  color: var(--text-dark);
+}
+
+
 .form-input:focus {
   outline: none;
   border-color: var(--secondary-blue);
@@ -882,5 +888,20 @@ body {
 :root[data-theme='dark'] .top-navbar-glass {
   background: rgba(30, 41, 59, 0.75) !important;
 }
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.animate-scalein {
+  animation: scaleIn 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
 
 

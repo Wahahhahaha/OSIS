@@ -65,7 +65,7 @@ export class AppController {
   // Manage Class Endpoints
   @Get('admin/classes')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
   async getClasses() {
     return this.prisma.class.findMany({
       include: {
@@ -101,7 +101,7 @@ export class AppController {
   // Manage Grade Endpoints
   @Get('admin/grades')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
   async getGrades() {
     return this.prisma.grade.findMany({
       orderBy: { gradename: 'asc' },
@@ -131,7 +131,7 @@ export class AppController {
   // Manage Major Endpoints
   @Get('admin/majors')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
   async getMajors() {
     return this.prisma.major.findMany({
       orderBy: { majorcode: 'asc' },
@@ -162,7 +162,7 @@ export class AppController {
   // Manage User Endpoints
   @Get('admin/users')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
   async getUsers() {
     const users = await this.prisma.user.findMany({
       include: {
@@ -607,7 +607,7 @@ export class AppController {
 
   @Post('admin/prokers')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris')
   async createProker(@Body() body: any) {
     return this.prisma.proker.create({
       data: {
@@ -615,14 +615,15 @@ export class AppController {
         description: body.description || null,
         targetDate: body.targetDate,
         status: body.status,
-        periodId: body.periodId
+        periodId: body.periodId,
+        candidateId: body.candidateId || null
       }
     });
   }
 
   @Put('admin/prokers/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris')
   async updateProker(@Param('id') id: string, @Body() body: any) {
     return this.prisma.proker.update({
       where: { id },
@@ -631,14 +632,15 @@ export class AppController {
         description: body.description || null,
         targetDate: body.targetDate,
         status: body.status,
-        periodId: body.periodId
+        periodId: body.periodId,
+        candidateId: body.candidateId || null
       }
     });
   }
 
   @Delete('admin/prokers/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris')
   async deleteProker(@Param('id') id: string) {
     return this.prisma.proker.delete({
       where: { id }
@@ -708,65 +710,5 @@ export class AppController {
       }
     }
 
-    return updatedPeriod;
-  }
-
-  // Kas OSIS Endpoints
-  @Get('admin/kas-claims')
-  @UseGuards(JwtAuthGuard)
-  async getKasClaims() {
-    return this.prisma.kasClaim.findMany();
-  }
-
-  @Post('admin/kas-claims')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
-  async claimKas(@Body() body: any) {
-    return this.prisma.kasClaim.upsert({
-      where: {
-        monthKey_classId: {
-          monthKey: body.monthKey,
-          classId: body.classId
-        }
-      },
-      update: {
-        claimed: body.claimed
-      },
-      create: {
-        monthKey: body.monthKey,
-        classId: body.classId,
-        claimed: body.claimed
-      }
-    });
-  }
-
-  @Get('admin/kas-expenses')
-  @UseGuards(JwtAuthGuard)
-  async getKasExpenses() {
-    return this.prisma.kasExpense.findMany({
-      orderBy: { date: 'desc' }
-    });
-  }
-
-  @Post('admin/kas-expenses')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
-  async createKasExpense(@Body() body: any) {
-    return this.prisma.kasExpense.create({
-      data: {
-        description: body.description,
-        amount: Number(body.amount),
-        date: body.date
-      }
-    });
-  }
-
-  @Delete('admin/kas-expenses/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
-  async deleteKasExpense(@Param('id') id: string) {
-    return this.prisma.kasExpense.delete({
-      where: { id }
-    });
   }
 }

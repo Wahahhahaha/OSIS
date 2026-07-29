@@ -25,7 +25,6 @@ import {
   Grid,
   ChevronDown,
   ChevronRight,
-  DollarSign,
   Search
 } from 'lucide-react';
 import { authApi } from './api';
@@ -82,7 +81,6 @@ const Dashboard = () => {
     if (path === '/system-setting') return 'system-setting';
     if (path === '/backup-db') return 'backup-db';
     if (path === '/profile') return 'profile';
-    if (path === '/kas-osis') return 'kas-osis';
     if (path === '/proker' || path === '/program-kerja') return 'proker';
     return 'dashboard';
   };
@@ -125,10 +123,8 @@ const Dashboard = () => {
   const [editProfileError, setEditProfileError] = useState('');
   const [editProfileSuccess, setEditProfileSuccess] = useState('');
 
-  // Modal Control State
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<any | null>(null);
-  const [resetPasswordNewVal, setResetPasswordNewVal] = useState('');
 
   // Dynamic Candidates State
   const [candidates, setCandidates] = useState<any[]>(() => {
@@ -180,41 +176,6 @@ const Dashboard = () => {
   const [newCandidatePeriodId, setNewCandidatePeriodId] = useState('');
   const [selectedPresidentId, setSelectedPresidentId] = useState('');
   const [selectedVicePresidentId, setSelectedVicePresidentId] = useState('');
-
-  // Kas OSIS Monthly Class Claims State
-  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
-  const [monthlyClaims, setMonthlyClaims] = useState<Record<string, Record<string, boolean>>>(() => {
-    const saved = localStorage.getItem('osis_monthly_kas_claims');
-    return saved ? JSON.parse(saved) : {};
-  });
-
-  useEffect(() => {
-    localStorage.setItem('osis_monthly_kas_claims', JSON.stringify(monthlyClaims));
-  }, [monthlyClaims]);
-
-  const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
-
-  // Dynamic Kas Expenses State
-  const [expenses, setExpenses] = useState<any[]>(() => {
-    const saved = localStorage.getItem('osis_kas_expenses');
-    return saved ? JSON.parse(saved) : [
-      { id: 'exp_1', description: 'Beli ATK & Kertas Print', amount: 45000, date: '2026-07-15' },
-      { id: 'exp_2', description: 'Konsumsi Rapat OSIS', amount: 75000, date: '2026-07-20' }
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem('osis_kas_expenses', JSON.stringify(expenses));
-  }, [expenses]);
-
-  // Add Expense Form State
-  const [expenseDesc, setExpenseDesc] = useState('');
-  const [expenseAmount, setExpenseAmount] = useState('');
-  const [expenseDate, setExpenseDate] = useState(() => {
-    const today = new Date();
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  });
-
   // Dynamic Proker State
   const [prokers, setProkers] = useState<any[]>(() => {
     const saved = localStorage.getItem('osis_prokers');
@@ -281,9 +242,55 @@ const Dashboard = () => {
     localStorage.setItem('osis_user_votes', JSON.stringify(userVotes));
   }, [userVotes]);
 
+  // Selected period ID for program kerja view
+  const [prokerPeriodId, setProkerPeriodId] = useState<string>('');
+
+  // Globally computed active period & selected proker period
+  const activePeriod = useMemo(() => {
+    return periods.find(p => p.status?.toLowerCase() === 'active') || periods[0];
+  }, [periods]);
+
+  const selectedProkerPeriod = useMemo(() => {
+    return periods.find(p => p.id === prokerPeriodId) || activePeriod;
+  }, [periods, prokerPeriodId, activePeriod]);
+
+  // Compute the winner candidate of the selected proker period based on votes
+  const selectedProkerWinnerCandidate = useMemo(() => {
+    if (!selectedProkerPeriod) return null;
+
+    // Find candidates of the selected period
+    const periodCandidates = candidates.filter(c => {
+      if (c.periodId === selectedProkerPeriod.id) return true;
+      const candidatePeriod = periods.find(p => p.id === c.periodId);
+      const candidateYearLabel = candidatePeriod ? candidatePeriod.yearLabel : (c.periodId === 'p3' ? '2026/2027' : c.periodId === 'p2' ? '2025/2026' : c.periodId === 'p1' ? '2024/2025' : '');
+      return candidateYearLabel === selectedProkerPeriod.yearLabel;
+    });
+
+    // Find winner based on votes
+    const periodVotes = Object.entries(userVotes)
+      .filter(([key]) => key.endsWith(`_${selectedProkerPeriod.id}`))
+      .map(([_, candidateId]) => candidateId);
+
+    const candidateVotes = periodCandidates.map(c => {
+      const count = periodVotes.filter(cid => cid === c.id).length;
+      return { ...c, votesCount: count };
+    }).sort((a, b) => b.votesCount - a.votesCount);
+
+    const maxVotes = candidateVotes.length > 0 ? candidateVotes[0].votesCount : 0;
+    const isDraw = candidateVotes.filter(c => c.votesCount === maxVotes).length > 1;
+    return (candidateVotes.length > 0 && maxVotes > 0 && !isDraw) ? candidateVotes[0] : null;
+  }, [selectedProkerPeriod, candidates, periods, userVotes]);
+
+  // Compute elected candidate for the selected proker period
+  const selectedProkerCandidate = useMemo(() => {
+    if (!selectedProkerPeriod) return null;
+    const electedId = electedPairs[selectedProkerPeriod.id] || (selectedProkerWinnerCandidate ? selectedProkerWinnerCandidate.id : undefined);
+    return candidates.find(c => c.id === electedId) || selectedProkerWinnerCandidate || null;
+  }, [selectedProkerPeriod, candidates, electedPairs, selectedProkerWinnerCandidate]);
+
   // Add Period Form State
   const [newPeriodYear, setNewPeriodYear] = useState('');
-  const [newPeriodStatus, setNewPeriodStatus] = useState('INACTIVE');
+  const [newPeriodStatus, setNewPeriodStatus] = useState('ACTIVE');
   const [newPeriodVoteStart, setNewPeriodVoteStart] = useState('');
   const [newPeriodVoteEnd, setNewPeriodVoteEnd] = useState('');
 
@@ -308,6 +315,8 @@ const Dashboard = () => {
 
   // Voter dropdown menu state
   const [voterDropdownOpen, setVoterDropdownOpen] = useState(false);
+
+
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
     const file = e.target.files?.[0];
@@ -404,8 +413,6 @@ const Dashboard = () => {
         loadCandidatesData();
         loadVotesData();
         loadProkersData();
-        loadKasClaimsData();
-        loadKasExpensesData();
 
         // Update Title and Favicon dynamically
         document.title = `Dashboard - ${system.systemname}`;
@@ -460,11 +467,11 @@ const Dashboard = () => {
         loadPeriodsData();
         loadCandidatesData();
       }
-      if (activeMenu === 'manage-user' || activeMenu === 'kandidat' || activeMenu === 'kas-osis') {
+      if (activeMenu === 'manage-user' || activeMenu === 'kandidat') {
         loadUsersData();
         loadCandidatesData();
       }
-      if (activeMenu === 'manage-user' || activeMenu === 'kas-osis') {
+      if (activeMenu === 'manage-user') {
         loadClassesData();
       }
       if (activeMenu === 'system-setting' && systemSettings) {
@@ -481,11 +488,6 @@ const Dashboard = () => {
       loadProkersData();
       loadPeriodsData();
       loadCandidatesData();
-    }
-    if (activeMenu === 'kas-osis') {
-      loadKasClaimsData();
-      loadKasExpensesData();
-      loadClassesData();
     }
     if (activeMenu === 'vote') {
       loadPeriodsData();
@@ -586,39 +588,6 @@ const Dashboard = () => {
       const savedProkers = localStorage.getItem('osis_prokers');
       if (savedProkers) {
         setProkers(JSON.parse(savedProkers));
-      }
-    }
-  };
-
-  const loadKasClaimsData = async () => {
-    try {
-      const data = await authApi.getKasClaims();
-      const map: Record<string, Record<string, boolean>> = {};
-      data.forEach(c => {
-        if (!map[c.monthKey]) map[c.monthKey] = {};
-        map[c.monthKey][c.classId] = c.claimed;
-      });
-      setMonthlyClaims(map);
-      localStorage.setItem('osis_monthly_kas_claims', JSON.stringify(map));
-    } catch (e) {
-      console.error(e);
-      const saved = localStorage.getItem('osis_monthly_kas_claims');
-      if (saved) {
-        setMonthlyClaims(JSON.parse(saved));
-      }
-    }
-  };
-
-  const loadKasExpensesData = async () => {
-    try {
-      const data = await authApi.getKasExpenses();
-      setExpenses(data);
-      localStorage.setItem('osis_kas_expenses', JSON.stringify(data));
-    } catch (e) {
-      console.error(e);
-      const saved = localStorage.getItem('osis_kas_expenses');
-      if (saved) {
-        setExpenses(JSON.parse(saved));
       }
     }
   };
@@ -815,7 +784,7 @@ const Dashboard = () => {
         voteEndDate: newPeriodVoteEnd
       });
       setNewPeriodYear('');
-      setNewPeriodStatus('INACTIVE');
+      setNewPeriodStatus('ACTIVE');
       setNewPeriodVoteStart('');
       setNewPeriodVoteEnd('');
       setActiveModal(null);
@@ -897,7 +866,7 @@ const Dashboard = () => {
         voteEndDate: newPeriodVoteEnd
       });
       setNewPeriodYear('');
-      setNewPeriodStatus('INACTIVE');
+      setNewPeriodStatus('ACTIVE');
       setNewPeriodVoteStart('');
       setNewPeriodVoteEnd('');
       setEditingItem(null);
@@ -937,15 +906,13 @@ const Dashboard = () => {
     }
   };
 
-  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetPasswordNewVal.trim() || !editingItem) return;
+  const executeResetPasswordToUsername = async () => {
+    if (!editingItem) return;
     try {
-      await authApi.resetUserPassword(editingItem.id, { password: resetPasswordNewVal });
-      setResetPasswordNewVal('');
+      await authApi.resetUserPassword(editingItem.id, { password: editingItem.username });
+      showToast(`Password untuk "${editingItem.username}" berhasil direset menjadi "${editingItem.username}".`);
       setEditingItem(null);
       setActiveModal(null);
-      showToast(`Password untuk "${editingItem.username}" berhasil direset.`);
     } catch (err: any) {
       console.error(err);
       alert(err.response?.data?.message || 'Gagal mereset password.');
@@ -1067,54 +1034,6 @@ const Dashboard = () => {
       alert('Gagal mengedit kandidat');
     }
   };
-
-  const handleToggleClassKasClaim = async (classId: string, monthKey: string) => {
-    try {
-      await authApi.claimKas({ monthKey, classId, claimed: true });
-      loadKasClaimsData();
-      showToast('Status iuran kas kelas berhasil diperbarui!');
-    } catch (e) {
-      console.error(e);
-      alert('Gagal memperbarui status kas kelas');
-    }
-  };
-
-  const handleAddExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!expenseDesc.trim() || !expenseAmount || !expenseDate) {
-      alert('Harap isi Keterangan, Jumlah, dan Tanggal.');
-      return;
-    }
-    try {
-      await authApi.createKasExpense({
-        description: expenseDesc,
-        amount: Number(expenseAmount),
-        date: expenseDate
-      });
-      setExpenseDesc('');
-      setExpenseAmount('');
-      const today = new Date();
-      setExpenseDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
-      setActiveModal(null);
-      loadKasExpensesData();
-      showToast('Catatan pengeluaran kas OSIS berhasil ditambahkan!');
-    } catch (err) {
-      console.error(err);
-      alert('Gagal menambahkan catatan pengeluaran');
-    }
-  };
-
-  const handleDeleteExpense = async (id: string) => {
-    if (!window.confirm('Yakin ingin menghapus catatan pengeluaran ini?')) return;
-    try {
-      await authApi.deleteKasExpense(id);
-      loadKasExpensesData();
-      showToast('Catatan pengeluaran kas OSIS berhasil dihapus!');
-    } catch (e) {
-      console.error(e);
-      alert('Gagal menghapus catatan pengeluaran');
-    }
-  };
   const handleAddProker = async (e: React.FormEvent, activePeriodId: string) => {
     e.preventDefault();
     if (!prokerName.trim() || !prokerTargetDate.trim()) {
@@ -1127,7 +1046,8 @@ const Dashboard = () => {
         description: prokerDesc,
         targetDate: prokerTargetDate,
         status: prokerStatus,
-        periodId: activePeriodId
+        periodId: activePeriodId,
+        candidateId: selectedProkerCandidate?.id || null
       });
       setProkerName('');
       setProkerDesc('');
@@ -1154,7 +1074,8 @@ const Dashboard = () => {
         description: prokerDesc,
         targetDate: prokerTargetDate,
         status: prokerStatus,
-        periodId: editingItem.periodId
+        periodId: editingItem.periodId,
+        candidateId: editingItem.candidateId || selectedProkerCandidate?.id || null
       });
       setEditingItem(null);
       setProkerName('');
@@ -1191,16 +1112,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleSelectElectedPair = async (periodId: string, candidateId: string) => {
-    try {
-      await authApi.setElectedPair(periodId, candidateId || null);
-      loadPeriodsData();
-      showToast('Pengurus OSIS terpilih berhasil ditetapkan!');
-    } catch (e) {
-      console.error(e);
-      alert('Gagal menetapkan pengurus terpilih');
-    }
-  };
 
   const handleCastVote = async (candidateId: string, periodId: string) => {
     if (!userData) return;
@@ -1713,8 +1624,8 @@ const Dashboard = () => {
         });
 
         return (
-          <div className="theme-card profile-card" style={{ gridColumn: 'span 2' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Users size={20} color="var(--secondary-blue)" />
                 Kandidat Ketua & Wakil Ketua OSIS
@@ -1737,12 +1648,12 @@ const Dashboard = () => {
               )}
             </div>
             
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
               Daftar pasangan calon OSIS yang sedang bersaing dalam pemilihan periode aktif.
             </p>
 
             {/* Filter & Search Bar */}
-            <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
               <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
                 <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input 
@@ -1768,169 +1679,140 @@ const Dashboard = () => {
               </select>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-              {filteredCandidates.map(c => {
-                const matchedPeriod = periods.find(p => p.id === c.periodId);
-                const periodLabel = matchedPeriod ? matchedPeriod.yearLabel : '2026/2027';
-                return (
-                  <div key={c.id} className="theme-card animate-slideup" style={{ padding: '24px', textAlign: 'left', border: '1px solid var(--card-border)', display: 'flex', gap: '16px', position: 'relative' }}>
-                    <img 
-                      src={c.photo || 'https://via.placeholder.com/80'} 
-                      alt={c.name} 
-                      style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', border: '1px solid var(--card-border)', flexShrink: 0 }} 
-                    />
-                    <div style={{ flexGrow: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', paddingRight: userData.role === 'superadmin' ? '50px' : '0' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', background: 'rgba(37,99,235,0.08)', color: 'var(--secondary-blue)', borderRadius: '6px' }}>
-                          PASLON {c.paslonNo}
-                        </span>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          Periode {periodLabel}
-                        </span>
-                      </div>
-                      <h3 style={{ margin: '0 0 4px', fontSize: '16px', color: 'var(--primary-navy)', fontWeight: 700 }}>{c.name}</h3>
-                      <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{c.classes}</p>
-                      
-                      <div style={{ fontSize: '12px', borderTop: '1px solid var(--card-border)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <div><strong>Visi:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.visi}</span></div>
-                        {c.misi && <div><strong>Misi:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.misi}</span></div>}
-                      </div>
- 
-                      {userData.role === 'superadmin' && (
-                        <div style={{ position: 'absolute', top: '12px', right: '12px', display: 'flex', gap: '6px' }}>
-                          <button 
-                            onClick={() => handleStartEditCandidate(c)} 
-                            className="action-btn action-btn-warning" 
-                            style={{ padding: '4px 8px' }}
-                            title="Edit Kandidat"
-                          >
-                            <Edit2 size={12} />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteCandidate(c.id)} 
-                            className="action-btn action-btn-danger" 
-                            style={{ padding: '4px 8px' }}
-                            title="Hapus Kandidat"
-                          >
-                            <Trash2 size={12} />
-                          </button>
+            {/* Scrollable Candidates Grid */}
+            <div className="custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto', paddingRight: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', paddingBottom: '16px' }}>
+                {filteredCandidates.map(c => {
+                  const matchedPeriod = periods.find(p => p.id === c.periodId);
+                  const periodLabel = matchedPeriod ? matchedPeriod.yearLabel : '2026/2027';
+                  return (
+                    <div key={c.id} className="theme-card animate-slideup" style={{ padding: '24px', textAlign: 'left', border: '1px solid var(--card-border)', display: 'flex', gap: '16px', position: 'relative' }}>
+                      <img 
+                        src={c.photo || 'https://via.placeholder.com/80'} 
+                        alt={c.name} 
+                        style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', border: '1px solid var(--card-border)', flexShrink: 0 }} 
+                      />
+                      <div style={{ flexGrow: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', paddingRight: userData.role === 'superadmin' ? '50px' : '0' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', background: 'rgba(37,99,235,0.08)', color: 'var(--secondary-blue)', borderRadius: '6px' }}>
+                            PASLON {c.paslonNo}
+                          </span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            Periode {periodLabel}
+                          </span>
                         </div>
-                      )}
+                        <h3 style={{ margin: '0 0 4px', fontSize: '16px', color: 'var(--primary-navy)', fontWeight: 700 }}>{c.name}</h3>
+                        <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{c.classes}</p>
+                        
+                        <div style={{ fontSize: '12px', borderTop: '1px solid var(--card-border)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div><strong>Visi:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.visi}</span></div>
+                          {c.misi && <div><strong>Misi:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.misi}</span></div>}
+                        </div>
+    
+                        {userData.role === 'superadmin' && (
+                          <div style={{ position: 'absolute', top: '12px', right: '12px', display: 'flex', gap: '6px' }}>
+                            <button 
+                              onClick={() => handleStartEditCandidate(c)} 
+                              className="action-btn action-btn-warning" 
+                              style={{ padding: '4px 8px' }}
+                              title="Edit Kandidat"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteCandidate(c.id)} 
+                              className="action-btn action-btn-danger" 
+                              style={{ padding: '4px 8px' }}
+                              title="Hapus Kandidat"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
+                  );
+                })}
+                {filteredCandidates.length === 0 && (
+                  <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '40px', color: 'var(--text-muted)', width: '100%' }}>
+                    Tidak ada data kandidat yang cocok dengan pencarian Anda.
                   </div>
-                );
-              })}
-              {filteredCandidates.length === 0 && (
-                <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '40px', color: 'var(--text-muted)', width: '100%' }}>
-                  Tidak ada data kandidat yang cocok dengan pencarian Anda.
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         );
       }
 
       case 'proker': {
-        const activePeriod = periods.find(p => p.status === 'active' || p.status === 'ACTIVE') || periods[0];
-        
-        // Find candidates of activePeriod
-        const activePeriodCandidates = activePeriod ? candidates.filter(c => {
-          if (c.periodId === activePeriod.id) return true;
-          const candidatePeriod = periods.find(p => p.id === c.periodId);
-          const candidateYearLabel = candidatePeriod ? candidatePeriod.yearLabel : (c.periodId === 'p3' ? '2026/2027' : c.periodId === 'p2' ? '2025/2026' : c.periodId === 'p1' ? '2024/2025' : '');
-          return candidateYearLabel === activePeriod.yearLabel;
+        const periodProkers = selectedProkerPeriod ? prokers.filter(p => {
+          const matchesPeriod = p.periodId === selectedProkerPeriod.id;
+          const matchesCandidate = selectedProkerCandidate ? (p.candidateId === selectedProkerCandidate.id || !p.candidateId) : true;
+          return matchesPeriod && matchesCandidate;
         }) : [];
-        
-        const activePeriodVotes = Object.entries(userVotes)
-          .filter(([key]) => key.endsWith(`_${activePeriod?.id}`))
-          .map(([_, candidateId]) => candidateId);
-        
-        const candidateVotes = activePeriodCandidates.map(c => {
-          const count = activePeriodVotes.filter(cid => cid === c.id).length;
-          return {
-            ...c,
-            votesCount: count,
-          };
-        }).sort((a, b) => b.votesCount - a.votesCount);
-        
-        const maxVotes = candidateVotes.length > 0 ? candidateVotes[0].votesCount : 0;
-        const isDraw = candidateVotes.filter(c => c.votesCount === maxVotes).length > 1;
-        
-        // Auto-select winner if there is one, otherwise fallback to manually selected electedCandidateId
-        const winnerCandidate = (candidateVotes.length > 0 && maxVotes > 0 && !isDraw) ? candidateVotes[0] : null;
-        
-        const electedCandidateId = activePeriod ? (electedPairs[activePeriod.id] || (winnerCandidate ? winnerCandidate.id : undefined)) : undefined;
-        const electedCandidate = candidates.find(c => c.id === electedCandidateId) || winnerCandidate;
-        
-        const periodProkers = activePeriod ? prokers.filter(p => {
-          if (p.periodId === activePeriod.id) return true;
-          const mockYearLabel = p.periodId === 'p3' ? '2026/2027' : p.periodId === 'p2' ? '2025/2026' : p.periodId === 'p1' ? '2024/2025' : '';
-          return mockYearLabel === activePeriod.yearLabel;
-        }) : [];
+
         const totalPro = periodProkers.length;
         const rencanaPro = periodProkers.filter(p => p.status === 'Rencana').length;
         const berjalanPro = periodProkers.filter(p => p.status === 'Berjalan').length;
         const selesaiPro = periodProkers.filter(p => p.status === 'Selesai').length;
 
         return (
-          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)', minHeight: '550px', boxSizing: 'border-box' }}>
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--card-border)', paddingBottom: '16px', flexShrink: 0, flexWrap: 'wrap', gap: '16px' }}>
-              <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
-                <Briefcase size={20} color="var(--secondary-blue)" />
-                Program Kerja OSIS
-              </h2>
-              
-              {userData.role === 'superadmin' && activePeriod && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Pengurus Terpilih:</span>
-                    <select 
-                      className="form-input" 
-                      style={{ width: '220px', margin: 0, paddingLeft: '12px', height: '36px', fontSize: '13px' }}
-                      value={electedCandidateId || ''}
-                      onChange={e => handleSelectElectedPair(activePeriod.id, e.target.value)}
-                    >
-                      <option value="">-- Belum Ditentukan --</option>
-                      {candidates.filter(c => {
-                        if (c.periodId === activePeriod.id) return true;
-                        const mockYearLabel = c.periodId === 'p3' ? '2026/2027' : c.periodId === 'p2' ? '2025/2026' : c.periodId === 'p1' ? '2024/2025' : '';
-                        return mockYearLabel === activePeriod.yearLabel;
-                      }).map(c => (
-                        <option key={c.id} value={c.id}>PASLON {c.paslonNo} ({c.name})</option>
-                      ))}
-                    </select>
-                  </div>
-                  {electedCandidate && (
-                    <button 
-                      onClick={() => {
-                        setProkerName('');
-                        setProkerDesc('');
-                        setProkerTargetDate('');
-                        setProkerStatus('Rencana');
-                        setEditingItem(null);
-                        setActiveModal('add-proker');
-                      }} 
-                      className="btn-primary-sm"
-                      style={{ padding: '8px 16px', height: '36px', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      <Plus size={16} /> Tambah Proker
-                    </button>
-                  )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
+                  <Briefcase size={20} color="var(--secondary-blue)" />
+                  Program Kerja OSIS
+                </h2>
+                
+                {/* Period Selector Dropdown */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Periode:</span>
+                  <select
+                    className="form-input"
+                    style={{ width: '140px', margin: 0, paddingLeft: '12px', paddingRight: '12px', paddingTop: 0, paddingBottom: 0, height: '36px', fontSize: '13px' }}
+                    value={selectedProkerPeriod?.id || ''}
+                    onChange={e => setProkerPeriodId(e.target.value)}
+                  >
+                    {periods.map(p => (
+                      <option key={p.id} value={p.id}>{p.yearLabel}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+
+                {selectedProkerCandidate && (
+                  <button 
+                    onClick={() => {
+                      setProkerName('');
+                      setProkerDesc('');
+                      setProkerTargetDate('');
+                      setProkerStatus('Rencana');
+                      setEditingItem(null);
+                      setActiveModal('add-proker');
+                    }} 
+                    className="btn-primary-sm"
+                    style={{ padding: '8px 16px', height: '36px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Plus size={16} /> Tambah Proker
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto', marginTop: '16px', paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>
-                Periode Pemilihan Aktif: <strong>{activePeriod ? activePeriod.yearLabel : 'Belum Ada'}</strong>
+                Periode Yang Dipilih: <strong>{selectedProkerPeriod ? selectedProkerPeriod.yearLabel : 'Belum Ada'}</strong>
               </p>
 
               {/* Elected Officer Banner */}
-              {electedCandidate ? (
+              {selectedProkerCandidate ? (
                 <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', background: 'linear-gradient(135deg, rgba(37,99,235,0.04) 0%, rgba(37,99,235,0) 100%)', display: 'flex', flexDirection: 'column', gap: '16px', borderRadius: '12px', textAlign: 'left' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--secondary-blue)', display: 'block' }}>
-                      Pengurus OSIS Terpilih (Periode {activePeriod ? activePeriod.yearLabel : '-'})
+                      Pengurus OSIS Terpilih (Periode {selectedProkerPeriod ? selectedProkerPeriod.yearLabel : '-'})
                     </span>
                     <span style={{ fontSize: '11px', padding: '4px 10px', background: 'var(--success)', color: '#fff', borderRadius: '12px', fontWeight: 700 }}>
                       Hasil Voting Terbanyak
@@ -1939,7 +1821,7 @@ const Dashboard = () => {
                   
                   <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <img 
-                      src={electedCandidate.photo || 'https://via.placeholder.com/64'} 
+                      src={selectedProkerCandidate.photo || 'https://via.placeholder.com/64'} 
                       alt="Pengurus" 
                       style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', border: '1px solid var(--card-border)' }} 
                     />
@@ -1949,10 +1831,10 @@ const Dashboard = () => {
                       <div>
                         <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>President (Ketua OSIS)</div>
                         <h4 style={{ margin: '4px 0 2px', fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700 }}>
-                          {electedCandidate.presidentName || electedCandidate.name.split(' & ')[0]}
+                          {selectedProkerCandidate.presidentName || selectedProkerCandidate.name.split(' & ')[0]}
                         </h4>
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          Kelas: {electedCandidate.presidentClass || electedCandidate.classes.split(' & ')[0] || '-'}
+                          Kelas: {selectedProkerCandidate.presidentClass || selectedProkerCandidate.classes.split(' & ')[0] || '-'}
                         </span>
                       </div>
                       
@@ -1963,10 +1845,10 @@ const Dashboard = () => {
                       <div>
                         <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Vice President (Wakil Ketua)</div>
                         <h4 style={{ margin: '4px 0 2px', fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700 }}>
-                          {electedCandidate.vicePresidentName || electedCandidate.name.split(' & ')[1]}
+                          {selectedProkerCandidate.vicePresidentName || selectedProkerCandidate.name.split(' & ')[1]}
                         </h4>
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          Kelas: {electedCandidate.vicePresidentClass || electedCandidate.classes.split(' & ')[1] || '-'}
+                          Kelas: {selectedProkerCandidate.vicePresidentClass || selectedProkerCandidate.classes.split(' & ')[1] || '-'}
                         </span>
                       </div>
                     </div>
@@ -1975,7 +1857,7 @@ const Dashboard = () => {
               ) : (
                 <div className="theme-card" style={{ padding: '24px', border: '1px dashed var(--card-border)', textAlign: 'center', borderRadius: '12px' }}>
                   <p style={{ color: 'var(--text-muted)', fontSize: '14px', margin: 0 }}>
-                    Belum ada pengurus OSIS terpilih yang ditetapkan menjabat untuk periode aktif ({activePeriod ? activePeriod.yearLabel : '-'}).
+                    Belum ada pengurus OSIS terpilih yang ditetapkan menjabat untuk periode yang dipilih ({selectedProkerPeriod ? selectedProkerPeriod.yearLabel : '-'}).
                   </p>
                   {userData.role === 'superadmin' && (
                     <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: '4px 0 0' }}>
@@ -1985,7 +1867,7 @@ const Dashboard = () => {
                 </div>
               )}
 
-              {electedCandidate && (
+              {selectedProkerCandidate && (
                 <>
                   {/* Proker Statistics */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
@@ -2079,346 +1961,11 @@ const Dashboard = () => {
         );
       }
 
-      case 'kas-osis': {
-        const studentUsers = users.filter(u => u.level === 'student');
-        const monthKey = `${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}`;
-        const classKasClaims = monthlyClaims[monthKey] || {};
-        
-        const monthNames = [
-          'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-          'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-        ];
-
-        // Overall calculations
-        let totalKasCollected = 0;
-        let totalKasTarget = 0;
-        let claimedClassesCount = 0;
-        let totalClassesWithStudents = 0;
-
-        classes.forEach(c => {
-          const classStudents = studentUsers.filter(u => u.classname.toLowerCase() === c.classname.toLowerCase());
-          const classTotalFee = classStudents.length * 5000;
-          totalKasTarget += classTotalFee;
-          if (classStudents.length > 0) {
-            totalClassesWithStudents++;
-          }
-          if (classKasClaims[c.id]) {
-            totalKasCollected += classTotalFee;
-            if (classStudents.length > 0) {
-              claimedClassesCount++;
-            }
-          }
-        });
-
-        // Cumulative Calculations (All time)
-        const getAllTimeCollectedKas = () => {
-          let total = 0;
-          Object.keys(monthlyClaims).forEach(mKey => {
-            const claims = monthlyClaims[mKey] || {};
-            classes.forEach(c => {
-              if (claims[c.id]) {
-                const classStudents = studentUsers.filter(u => u.classname.toLowerCase() === c.classname.toLowerCase());
-                total += classStudents.length * 5000;
-              }
-            });
-          });
-          return total;
-        };
-
-        const allTimeCollected = getAllTimeCollectedKas();
-        const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-        const currentBalance = allTimeCollected - totalExpenses;
-        
-        const formatRupiah = (amount: number) => {
-          return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
-        };
-
-        return (
-          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 180px)', minHeight: '550px', boxSizing: 'border-box' }}>
-            <h2 className="profile-card-title" style={{ flexShrink: 0, margin: 0, paddingBottom: '16px', borderBottom: '1px solid var(--card-border)' }}>
-              <DollarSign size={20} color="var(--secondary-blue)" />
-              Kelola Kas & Keuangan OSIS
-            </h2>
-
-            <div className="custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto', marginTop: '16px', paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-            {/* Month Switcher Toolbar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: '16px', background: 'var(--bg-soft-white)', border: '1px solid var(--card-border)', borderRadius: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>Periode Bulan:</span>
-                <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--primary-navy)' }}>
-                  {monthNames[selectedMonth.getMonth()]} {selectedMonth.getFullYear()}
-                </span>
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button 
-                  onClick={() => {
-                    const prev = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1);
-                    setSelectedMonth(prev);
-                  }}
-                  className="btn-secondary-sm"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 12px', fontWeight: 700 }}
-                  title="Bulan Sebelumnya"
-                >
-                  &larr;
-                </button>
-                
-                <button 
-                  onClick={() => {
-                    setSelectedMonth(new Date());
-                  }}
-                  className="btn-secondary-sm"
-                  style={{ fontWeight: 600, padding: '8px 16px' }}
-                >
-                  Bulan Ini (Today)
-                </button>
-                
-                <button 
-                  onClick={() => {
-                    const next = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1);
-                    setSelectedMonth(next);
-                  }}
-                  className="btn-secondary-sm"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 12px', fontWeight: 700 }}
-                  title="Bulan Berikutnya"
-                >
-                  &rarr;
-                </button>
-              </div>
-            </div>
-
-            {/* General Financial Summary Banner */}
-            <h3 style={{ fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700, margin: '0 0 12px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>
-              Laporan Ringkasan Keuangan (All-Time)
-            </h3>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
-              <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0) 100%)' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Saldo Kas Saat Ini</span>
-                <h3 style={{ margin: '8px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--success)' }}>
-                  {formatRupiah(currentBalance)}
-                </h3>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  Sisa saldo bersih kas OSIS
-                </p>
-              </div>
-
-              <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Kas Masuk</span>
-                <h3 style={{ margin: '8px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--primary-navy)' }}>
-                  {formatRupiah(allTimeCollected)}
-                </h3>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  Akumulasi seluruh bulan
-                </p>
-              </div>
-
-              <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', background: 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(239,68,68,0) 100%)' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Pengeluaran</span>
-                <h3 style={{ margin: '8px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--danger)' }}>
-                  {formatRupiah(totalExpenses)}
-                </h3>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  Total pengeluaran dana kas
-                </p>
-              </div>
-            </div>
-
-            {/* Monthly Details Section */}
-            <h3 style={{ fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700, margin: '0 0 12px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>
-              Penerimaan Kas Bulan: {monthNames[selectedMonth.getMonth()]} {selectedMonth.getFullYear()}
-            </h3>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-              <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Kas Terkumpul Bulan Ini</span>
-                <h4 style={{ margin: '4px 0 0', fontSize: '18px', fontWeight: 700, color: 'var(--success)' }}>
-                  {formatRupiah(totalKasCollected)}
-                </h4>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Target: {formatRupiah(totalKasTarget)}</span>
-              </div>
-
-              <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Persentase Klaim Kelas</span>
-                <h4 style={{ margin: '4px 0 0', fontSize: '18px', fontWeight: 700, color: 'var(--primary-navy)' }}>
-                  {claimedClassesCount} / {totalClassesWithStudents} Kelas
-                </h4>
-                <div style={{ marginTop: '6px', background: 'var(--card-border)', borderRadius: '4px', height: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${totalClassesWithStudents ? (claimedClassesCount / totalClassesWithStudents) * 100 : 0}%`, background: 'var(--success)', height: '100%' }}></div>
-                </div>
-              </div>
-            </div>
-
-            {/* List of Classes */}
-            <div className="custom-scrollbar" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '420px', paddingRight: '8px', marginBottom: '40px' }}>
-              {classes.map(c => {
-                const classStudents = studentUsers.filter(u => u.classname.toLowerCase() === c.classname.toLowerCase());
-                const classTotalFee = classStudents.length * 5000;
-                const isClaimed = classKasClaims[c.id] === true;
-                const isExpanded = expandedClassId === c.id;
-
-                return (
-                  <div key={c.id} className="theme-card animate-slideup" style={{ padding: '20px', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        {classStudents.length > 0 && (
-                          <input 
-                            type="checkbox" 
-                            checked={isClaimed}
-                            disabled={isClaimed}
-                            onChange={() => handleToggleClassKasClaim(c.id, monthKey)}
-                            style={{ 
-                              width: '22px', 
-                              height: '22px', 
-                              cursor: isClaimed ? 'not-allowed' : 'pointer',
-                              accentColor: 'var(--success)'
-                            }} 
-                          />
-                        )}
-                        <div>
-                          <h3 style={{ margin: '0 0 4px', fontSize: '16px', color: 'var(--primary-navy)', fontWeight: 700 }}>
-                            Kelas {c.classname}
-                          </h3>
-                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            {classStudents.length} Siswa Terdaftar
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-                        <div style={{ textAlign: 'right' }}>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block' }}>Iuran Kas (Rp 5.000 / Siswa)</span>
-                          <strong style={{ fontSize: '14px', color: isClaimed ? 'var(--success)' : 'var(--text-dark)' }}>
-                            {isClaimed ? formatRupiah(classTotalFee) : formatRupiah(0)} <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '12px' }}>/ {formatRupiah(classTotalFee)}</span>
-                          </strong>
-                        </div>
-                        
-                        {classStudents.length === 0 ? (
-                          <span className="badge badge-secondary" style={{ padding: '6px 12px', borderRadius: '8px' }}>Kosong</span>
-                        ) : isClaimed ? (
-                          <span className="badge badge-success" style={{ padding: '6px 12px', borderRadius: '8px', color: 'var(--success)' }}>Telah Diklaim</span>
-                        ) : (
-                          <span className="badge badge-warning" style={{ padding: '6px 12px', borderRadius: '8px', color: 'var(--warning)' }}>Belum Diklaim</span>
-                        )}
-
-                        <button 
-                          onClick={() => setExpandedClassId(isExpanded ? null : c.id)} 
-                          className="btn-secondary-sm"
-                          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                        >
-                          {isExpanded ? 'Tutup Detail' : 'Lihat Anggota'}
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="table-responsive animate-slideup" style={{ borderTop: '1px solid var(--card-border)', paddingTop: '16px', marginTop: '4px' }}>
-                        <h4 style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--primary-navy)', fontWeight: 600 }}>Daftar Anggota Kelas:</h4>
-                        {classStudents.length === 0 ? (
-                          <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '8px 0' }}>Tidak ada murid di kelas ini.</p>
-                        ) : (
-                          <table className="data-table" style={{ width: '100%' }}>
-                            <thead>
-                              <tr>
-                                <th style={{ textAlign: 'left', padding: '10px 12px' }}>Nama Murid</th>
-                                <th style={{ textAlign: 'center', padding: '10px 12px', width: '150px' }}>Iuran Wajib</th>
-                                <th style={{ textAlign: 'center', padding: '10px 12px', width: '150px' }}>Status Pembayaran</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {classStudents.map(u => (
-                                <tr key={u.id} style={{ borderBottom: '1px solid var(--card-border)' }}>
-                                  <td style={{ padding: '12px 12px', fontWeight: 500, color: 'var(--text-dark)' }}>{u.username}</td>
-                                  <td style={{ padding: '12px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>Rp 5.000</td>
-                                  <td style={{ padding: '12px 12px', textAlign: 'center' }}>
-                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isClaimed ? 'var(--success)' : 'var(--text-muted)' }}>
-                                      {isClaimed ? 'Lunas (Kolektif)' : 'Belum Diklaim'}
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Expenses Section */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>
-              <h3 style={{ fontSize: '16px', color: 'var(--primary-navy)', fontWeight: 700, margin: 0 }}>
-                Catatan Pengeluaran Kas OSIS
-              </h3>
-              <button 
-                onClick={() => {
-                  const today = new Date();
-                  setExpenseDate(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
-                  setExpenseDesc('');
-                  setExpenseAmount('');
-                  setActiveModal('add-expense');
-                }} 
-                className="btn-primary-sm"
-              >
-                <Plus size={16} /> Tambah Pengeluaran
-              </button>
-            </div>
-
-            <div className="table-responsive custom-scrollbar" style={{ maxHeight: '300px', paddingRight: '4px' }}>
-              {expenses.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                  Belum ada catatan pengeluaran kas.
-                </div>
-              ) : (
-                <table className="data-table" style={{ width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left', padding: '12px' }}>Tanggal</th>
-                      <th style={{ textAlign: 'left', padding: '12px' }}>Keterangan / Keperluan</th>
-                      <th style={{ textAlign: 'right', padding: '12px' }}>Jumlah Dana</th>
-                      <th style={{ textAlign: 'center', padding: '12px', width: '100px' }}>Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {expenses.map(exp => (
-                      <tr key={exp.id} style={{ borderBottom: '1px solid var(--card-border)' }}>
-                        <td style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                          {new Date(exp.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </td>
-                        <td style={{ padding: '12px', fontWeight: 500, color: 'var(--text-dark)' }}>
-                          {exp.description}
-                        </td>
-                        <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: 'var(--danger)' }}>
-                          {formatRupiah(exp.amount)}
-                        </td>
-                        <td style={{ padding: '12px', textAlign: 'center' }}>
-                          <button 
-                            onClick={() => handleDeleteExpense(exp.id)} 
-                            className="action-btn action-btn-danger"
-                            title="Hapus Pengeluaran"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-      }
 
       case 'manage-class':
         return (
-          <div className="theme-card profile-card" style={{ gridColumn: 'span 2' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <BookOpen size={20} color="var(--secondary-blue)" />
                 Kelola Data Kelas
@@ -2427,11 +1974,11 @@ const Dashboard = () => {
                 <Plus size={16} /> Tambah Kelas
               </button>
             </div>
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
               Kelola data kelas terdaftar dalam sistem.
             </p>
 
-            <div className="admin-table-container">
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -2476,8 +2023,8 @@ const Dashboard = () => {
 
       case 'manage-grade':
         return (
-          <div className="theme-card profile-card" style={{ gridColumn: 'span 2' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Award size={20} color="var(--secondary-blue)" />
                 Kelola Data Grade (Tingkatan)
@@ -2486,11 +2033,11 @@ const Dashboard = () => {
                 <Plus size={16} /> Tambah Grade
               </button>
             </div>
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
               Pengaturan tingkatan kelas aktif dalam sekolah.
             </p>
 
-            <div className="admin-table-container" style={{ maxWidth: '400px' }}>
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto', maxWidth: '400px' }}>
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -2524,8 +2071,8 @@ const Dashboard = () => {
 
       case 'manage-major':
         return (
-          <div className="theme-card profile-card" style={{ gridColumn: 'span 2' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <GraduationCap size={20} color="var(--secondary-blue)" />
                 Kelola Data Jurusan (Major)
@@ -2534,11 +2081,11 @@ const Dashboard = () => {
                 <Plus size={16} /> Tambah Jurusan
               </button>
             </div>
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
               Pengaturan data jurusan sekolah terdaftar.
             </p>
 
-            <div className="admin-table-container">
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -2590,15 +2137,15 @@ const Dashboard = () => {
         };
 
         return (
-          <div className="theme-card profile-card" style={{ gridColumn: 'span 2' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Calendar size={20} color="var(--secondary-blue)" />
                 Kelola Data Periode & Waktu Voting
               </h2>
               <button onClick={() => {
                 setNewPeriodYear('');
-                setNewPeriodStatus('INACTIVE');
+                setNewPeriodStatus('ACTIVE');
                 setNewPeriodVoteStart('');
                 setNewPeriodVoteEnd('');
                 setActiveModal('add-period');
@@ -2606,10 +2153,10 @@ const Dashboard = () => {
                 <Plus size={16} /> Tambah Periode
               </button>
             </div>
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
               Pengaturan tahun ajaran periode kepengurusan OSIS dan rentang durasi pelaksanaan voting.
             </p>
-            <div className="admin-table-container">
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -2654,8 +2201,8 @@ const Dashboard = () => {
 
       case 'manage-user':
         return (
-          <div className="theme-card profile-card" style={{ gridColumn: 'span 2' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <UserIcon className="text-muted" size={20} style={{ color: 'var(--secondary-blue)' }} />
                 Kelola Pengguna Sistem
@@ -2664,10 +2211,10 @@ const Dashboard = () => {
                 <Plus size={16} /> Tambah User
               </button>
             </div>
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
               Daftar seluruh akun pengguna yang terdaftar di database sistem beserta level aksesnya.
             </p>
-            <div className="admin-table-container">
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -2702,8 +2249,7 @@ const Dashboard = () => {
                         </button>
                         <button onClick={() => {
                           setEditingItem(u);
-                          setResetPasswordNewVal('');
-                          setActiveModal('reset-password');
+                          setActiveModal('confirm-reset-pw');
                         }} className="action-btn" style={{ marginRight: '8px' }}>
                           <Lock size={13} /> Reset PW
                         </button>
@@ -3167,13 +2713,13 @@ const Dashboard = () => {
       {/* Sidebar on Left */}
       <div className="theme-card sidebar">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', paddingLeft: '8px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1, marginRight: '12px' }}>
             {systemSettings?.systemlogo ? (
-              <img src={systemSettings.systemlogo} alt="System Logo" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover' }} />
+              <img src={systemSettings.systemlogo} alt="System Logo" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
             ) : (
-              <Building size={28} color="var(--secondary-blue)" />
+              <Building size={28} color="var(--secondary-blue)" style={{ flexShrink: 0 }} />
             )}
-            <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--primary-navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--primary-navy)', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
               {systemSettings?.systemname || 'E-OSIS'}
             </span>
           </div>
@@ -3210,9 +2756,7 @@ const Dashboard = () => {
             <div className={`sidebar-item ${activeMenu === 'kandidat' ? 'active' : ''}`} onClick={() => navigate('/candidates')}>
               <Users size={16} /> Kandidat OSIS
             </div>
-            <div className={`sidebar-item ${activeMenu === 'kas-osis' ? 'active' : ''}`} onClick={() => navigate('/kas-osis')}>
-              <DollarSign size={16} /> Kas OSIS
-            </div>
+
             <div className={`sidebar-item ${activeMenu === 'proker' ? 'active' : ''}`} onClick={() => navigate('/proker')}>
               <Briefcase size={16} /> Program Kerja
             </div>
@@ -3353,9 +2897,8 @@ const Dashboard = () => {
                 {activeModal === 'edit-period' && 'Edit Periode'}
                 {activeModal === 'add-user' && 'Tambah Pengguna Baru'}
                 {activeModal === 'edit-user' && 'Edit Pengguna'}
-                {activeModal === 'reset-password' && 'Reset Password Pengguna'}
+                {activeModal === 'confirm-reset-pw' && 'Konfirmasi Reset Password'}
                 {activeModal === 'add-candidate' && 'Tambah Kandidat OSIS Baru'}
-                {activeModal === 'add-expense' && 'Tambah Catatan Pengeluaran Kas'}
                 {activeModal === 'add-proker' && 'Tambah Program Kerja OSIS'}
                 {activeModal === 'edit-proker' && 'Edit Program Kerja OSIS'}
               </h3>
@@ -3497,7 +3040,7 @@ const Dashboard = () => {
                       <label className="form-label">Pilih Kelas</label>
                       <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserClassId} onChange={e => setNewUserClassId(e.target.value)} required>
                         <option value="">Pilih Kelas</option>
-                        {classes.map(c => <option key={c.id} value={c.id}>{c.classname}</option>)}
+                        {classes.map(c => <option key={c.id} value={c.id}>{`${c.grade?.gradename || ''} ${c.major?.majorcode || ''} ${c.classname}`.trim()}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
@@ -3627,7 +3170,7 @@ const Dashboard = () => {
                       <label className="form-label">Pilih Kelas</label>
                       <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserClassId} onChange={e => setNewUserClassId(e.target.value)} required>
                         <option value="">Pilih Kelas</option>
-                        {classes.map(c => <option key={c.id} value={c.id}>{c.classname}</option>)}
+                        {classes.map(c => <option key={c.id} value={c.id}>{`${c.grade?.gradename || ''} ${c.major?.majorcode || ''} ${c.classname}`.trim()}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
@@ -3673,21 +3216,21 @@ const Dashboard = () => {
               </form>
             )}
 
-            {activeModal === 'reset-password' && (
-              <form onSubmit={handleResetPasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
-                <div className="form-group">
-                  <label className="form-label">Username</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px', opacity: 0.6 }} value={editingItem?.username || ''} disabled />
+
+
+            {activeModal === 'confirm-reset-pw' && (
+              <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-dark)', lineHeight: '1.6' }}>
+                  Apakah Anda yakin ingin mereset password untuk pengguna <strong>{editingItem?.username}</strong>?
+                </p>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)', background: 'var(--bg-soft-white)', padding: '12px', borderRadius: '8px', borderLeft: '4px solid var(--warning)' }}>
+                  Password baru akan otomatis diatur ulang menjadi sama dengan username-nya: <strong>{editingItem?.username}</strong>
+                </p>
+                <div className="modal-actions" style={{ marginTop: '8px' }}>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
+                  <button type="button" className="btn-primary-sm" onClick={executeResetPasswordToUsername} style={{ background: 'var(--warning)', borderColor: 'var(--warning)', color: '#ffffff' }}>Ya, Reset Password</button>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Password Baru (Min. 6 Karakter)</label>
-                  <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Masukkan password baru untuk user ini" value={resetPasswordNewVal} onChange={e => setResetPasswordNewVal(e.target.value)} required minLength={6} />
-                </div>
-                <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); setResetPasswordNewVal(''); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Reset Password</button>
-                </div>
-              </form>
+              </div>
             )}
 
             {(activeModal === 'add-candidate' || activeModal === 'edit-candidate') && (
@@ -3789,29 +3332,9 @@ const Dashboard = () => {
               </form>
             )}
 
-            {activeModal === 'add-expense' && (
-              <form onSubmit={handleAddExpense} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
-                <div className="form-group">
-                  <label className="form-label">Keterangan / Keperluan Pengeluaran</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: Konsumsi Rapat Anggota" value={expenseDesc} onChange={e => setExpenseDesc(e.target.value)} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Jumlah Dana (Rp)</label>
-                  <input type="number" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: 50000" value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Tanggal Transaksi</label>
-                  <input type="date" className="form-input" style={{ paddingLeft: '16px' }} value={expenseDate} onChange={e => setExpenseDate(e.target.value)} required />
-                </div>
-                <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan Catatan</button>
-                </div>
-              </form>
-            )}
 
             {(activeModal === 'add-proker' || activeModal === 'edit-proker') && (
-              <form onSubmit={activeModal === 'edit-proker' ? handleEditProker : (e) => handleAddProker(e, periods.find(p => p.status === 'active')?.id || periods[0]?.id || 'p3')} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+              <form onSubmit={activeModal === 'edit-proker' ? handleEditProker : (e) => handleAddProker(e, selectedProkerPeriod?.id || 'p3')} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
                   <label className="form-label">Nama Program Kerja</label>
                   <input 
