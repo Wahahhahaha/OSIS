@@ -19,7 +19,13 @@ export class UsersService {
                 major: true,
               },
             },
-            role: true,
+            organizationMembers: {
+              include: {
+                role: true,
+                period: true,
+                section: true,
+              },
+            },
           },
         },
         schools: {
@@ -49,7 +55,13 @@ export class UsersService {
                 major: true,
               },
             },
-            role: true,
+            organizationMembers: {
+              include: {
+                role: true,
+                period: true,
+                section: true,
+              },
+            },
           },
         },
         schools: {

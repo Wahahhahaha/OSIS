@@ -167,7 +167,17 @@ export class AppController {
     const users = await this.prisma.user.findMany({
       include: {
         level: true,
-        students: { include: { role: true, class: true } },
+        students: {
+          include: {
+            class: true,
+            organizationMembers: {
+              include: {
+                role: true,
+                period: true
+              }
+            }
+          }
+        },
         schools: { include: { role: true } },
         employers: { include: { role: true } },
       },
@@ -181,16 +191,19 @@ export class AppController {
       let classname = '-';
       let classid = '';
       if (u.level.levelname === 'student' && u.students.length > 0) {
-        email = u.students[0].email;
-        role = u.students[0].role?.rolename || 'student';
-        classname = u.students[0].class?.classname || '-';
-        classid = u.students[0].classid || '';
+        const s = u.students[0];
+        email = s.email;
+        const activeMember = s.organizationMembers.find(om => om.period.status.toLowerCase() === 'active')
+          || s.organizationMembers[0];
+        role = (activeMember?.role?.rolename || 'student').toLowerCase();
+        classname = s.class?.classname || '-';
+        classid = s.classid || '';
       } else if (u.level.levelname === 'school' && u.schools.length > 0) {
         email = u.schools[0].email;
-        role = u.schools[0].role.rolename;
+        role = u.schools[0].role.rolename.toLowerCase();
       } else if (u.level.levelname === 'employer' && u.employers.length > 0) {
         email = u.employers[0].email;
-        role = u.employers[0].role.rolename;
+        role = u.employers[0].role.rolename.toLowerCase();
       }
       return {
         id: u.id,
@@ -232,15 +245,11 @@ export class AppController {
     });
 
     if (body.level === 'student') {
-      const role = await this.prisma.role.findFirst({
-        where: { rolename: body.role || 'members' },
-      });
       await this.prisma.student.create({
         data: {
           userid: newUser.id,
           email: body.email,
           classid: body.classid || null,
-          roleid: role?.id || null,
         },
       });
     } else if (body.level === 'school') {
@@ -315,7 +324,7 @@ export class AppController {
         data: { status: 'INACTIVE' }
       });
     }
-    return this.prisma.period.create({
+    const period = await this.prisma.period.create({
       data: {
         yearLabel: body.yearLabel,
         status: body.status,
@@ -323,6 +332,51 @@ export class AppController {
         voteEndDate: body.voteEndDate || null
       }
     });
+
+    const startYear = body.yearLabel.split('/')[0];
+    const endYear = body.yearLabel.split('/')[1] || String(Number(startYear) + 1);
+
+    await this.prisma.proker.createMany({
+      data: [
+        {
+          name: 'MPLS (Masa Pengenalan Lingkungan Sekolah)',
+          description: 'Kegiatan pengenalan lingkungan sekolah bagi siswa baru kelas VII / X.',
+          targetDate: `Juli ${startYear}`,
+          status: 'Rencana',
+          periodId: period.id,
+        },
+        {
+          name: 'Peringatan HUT RI',
+          description: 'Penyelenggaraan berbagai perlombaan dan upacara bendera dalam rangka memperingati Hari Kemerdekaan Republik Indonesia.',
+          targetDate: `Agustus ${startYear}`,
+          status: 'Rencana',
+          periodId: period.id,
+        },
+        {
+          name: 'Hari Guru Nasional',
+          description: 'Peringatan Hari Guru Nasional sebagai bentuk apresiasi terhadap jasa para guru.',
+          targetDate: `November ${startYear}`,
+          status: 'Rencana',
+          periodId: period.id,
+        },
+        {
+          name: 'Classmeet Akhir Tahun (Semester Ganjil)',
+          description: 'Kegiatan perlombaan antar kelas setelah ujian semester ganjil selesai.',
+          targetDate: `Desember ${startYear}`,
+          status: 'Rencana',
+          periodId: period.id,
+        },
+        {
+          name: 'Classmeet Kenaikan Kelas (Semester Genap)',
+          description: 'Kegiatan perlombaan antar kelas di pertengahan Juni sebelum pembagian rapor kenaikan kelas.',
+          targetDate: `Juni ${endYear}`,
+          status: 'Rencana',
+          periodId: period.id,
+        },
+      ]
+    });
+
+    return period;
   }
 
   @Put('admin/periods/:id')
@@ -343,6 +397,164 @@ export class AppController {
         voteStartDate: body.voteStartDate || null,
         voteEndDate: body.voteEndDate || null
       }
+    });
+  }
+
+  // Manage Role Endpoints
+  @Get('admin/roles')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
+  async getRoles() {
+    return this.prisma.role.findMany({
+      orderBy: { rolename: 'asc' },
+    });
+  }
+
+  @Post('admin/roles')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async createRole(@Body() body: any) {
+    return this.prisma.role.create({
+      data: {
+        rolename: body.rolename,
+      },
+    });
+  }
+
+  @Put('admin/roles/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async updateRole(@Param('id') id: string, @Body() body: any) {
+    return this.prisma.role.update({
+      where: { id },
+      data: {
+        rolename: body.rolename,
+      },
+    });
+  }
+
+  @Delete('admin/roles/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async deleteRole(@Param('id') id: string) {
+    return this.prisma.role.delete({
+      where: { id },
+    });
+  }
+
+  // Manage Section Endpoints
+  @Get('admin/sections')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
+  async getSections() {
+    return this.prisma.section.findMany({
+      orderBy: { sectionname: 'asc' },
+    });
+  }
+
+  @Post('admin/sections')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async createSection(@Body() body: any) {
+    return this.prisma.section.create({
+      data: {
+        sectionname: body.sectionname,
+      },
+    });
+  }
+
+  @Put('admin/sections/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async updateSection(@Param('id') id: string, @Body() body: any) {
+    return this.prisma.section.update({
+      where: { id },
+      data: {
+        sectionname: body.sectionname,
+      },
+    });
+  }
+
+  @Delete('admin/sections/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async deleteSection(@Param('id') id: string) {
+    return this.prisma.section.delete({
+      where: { id },
+    });
+  }
+
+  // Manage Org Member Endpoints
+  @Get('admin/org-members')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
+  async getOrgMembers() {
+    return this.prisma.organizationMember.findMany({
+      include: {
+        student: {
+          include: {
+            class: true
+          }
+        },
+        role: true,
+        period: true,
+        section: true
+      },
+      orderBy: [
+        { period: { yearLabel: 'desc' } },
+        { role: { rolename: 'asc' } }
+      ]
+    });
+  }
+
+  @Post('admin/org-members')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async createOrgMember(@Body() body: any) {
+    return this.prisma.organizationMember.create({
+      data: {
+        studentid: body.studentid,
+        roleid: body.roleid,
+        periodid: body.periodid,
+        sectionid: body.sectionid || null
+      }
+    });
+  }
+
+  @Put('admin/org-members/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async updateOrgMember(@Param('id') id: string, @Body() body: any) {
+    return this.prisma.organizationMember.update({
+      where: { id },
+      data: {
+        studentid: body.studentid,
+        roleid: body.roleid,
+        periodid: body.periodid,
+        sectionid: body.sectionid || null
+      }
+    });
+  }
+
+  @Delete('admin/org-members/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async deleteOrgMember(@Param('id') id: string) {
+    return this.prisma.organizationMember.delete({
+      where: { id }
+    });
+  }
+
+  @Get('admin/students')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
+  async getStudents() {
+    return this.prisma.student.findMany({
+      include: {
+        class: true,
+        user: true
+      },
+      orderBy: { user: { username: 'asc' } }
     });
   }
 
@@ -452,13 +664,11 @@ export class AppController {
     if (levelname === 'student') {
       const student = await this.prisma.student.findFirst({ where: { userid: id } });
       if (student) {
-        const role = body.role ? await this.prisma.role.findFirst({ where: { rolename: body.role } }) : null;
         await this.prisma.student.update({
           where: { id: student.id },
           data: {
             email: body.email,
             classid: body.classid || null,
-            roleid: role?.id || null,
           },
         });
       }
@@ -667,44 +877,87 @@ export class AppController {
     });
 
     if (periodCandidates.length > 0) {
-      // 3. Find the roles for 'president' and 'vice president'
-      const presidentRole = await this.prisma.role.findFirst({
-        where: { rolename: { equals: 'president', mode: 'insensitive' } }
+      // 3. Find the roles for 'president' and 'vice president' (case-insensitive & fallback options)
+      let presidentRole = await this.prisma.role.findFirst({
+        where: {
+          OR: [
+            { rolename: { equals: 'president', mode: 'insensitive' } },
+            { rolename: { contains: 'president', mode: 'insensitive' } },
+            { rolename: { contains: 'ketua', mode: 'insensitive' } }
+          ]
+        }
       });
-      const vicePresidentRole = await this.prisma.role.findFirst({
-        where: { rolename: { equals: 'vice president', mode: 'insensitive' } }
+      let vicePresidentRole = await this.prisma.role.findFirst({
+        where: {
+          OR: [
+            { rolename: { equals: 'vice president', mode: 'insensitive' } },
+            { rolename: { contains: 'vice', mode: 'insensitive' } },
+            { rolename: { contains: 'wakil', mode: 'insensitive' } }
+          ]
+        }
       });
+
+      if (!presidentRole) {
+        presidentRole = await this.prisma.role.create({
+          data: { rolename: 'president' }
+        });
+      }
+      if (!vicePresidentRole) {
+        vicePresidentRole = await this.prisma.role.create({
+          data: { rolename: 'vice president' }
+        });
+      }
 
       for (const candidate of periodCandidates) {
         const isWinner = candidateId && candidate.id === candidateId;
 
-        // Update President student (Winner -> president role, Loser -> null)
+        // Update President student (Winner -> add to OrganizationMember, Loser/Reset -> remove from OrganizationMember)
         if (candidate.presidentId && candidate.presidentId !== '-') {
           const student = await this.prisma.student.findFirst({
             where: { userid: candidate.presidentId }
           });
           if (student) {
-            await this.prisma.student.update({
-              where: { id: student.id },
-              data: {
-                roleid: isWinner && presidentRole ? presidentRole.id : null
+            await this.prisma.organizationMember.deleteMany({
+              where: {
+                studentid: student.id,
+                periodid: id
               }
             });
+
+            if (isWinner && presidentRole) {
+              await this.prisma.organizationMember.create({
+                data: {
+                  studentid: student.id,
+                  periodid: id,
+                  roleid: presidentRole.id
+                }
+              });
+            }
           }
         }
 
-        // Update Vice President student (Winner -> vice president role, Loser -> null)
+        // Update Vice President student
         if (candidate.vicePresidentId && candidate.vicePresidentId !== '-') {
           const student = await this.prisma.student.findFirst({
             where: { userid: candidate.vicePresidentId }
           });
           if (student) {
-            await this.prisma.student.update({
-              where: { id: student.id },
-              data: {
-                roleid: isWinner && vicePresidentRole ? vicePresidentRole.id : null
+            await this.prisma.organizationMember.deleteMany({
+              where: {
+                studentid: student.id,
+                periodid: id
               }
             });
+
+            if (isWinner && vicePresidentRole) {
+              await this.prisma.organizationMember.create({
+                data: {
+                  studentid: student.id,
+                  periodid: id,
+                  roleid: vicePresidentRole.id
+                }
+              });
+            }
           }
         }
       }

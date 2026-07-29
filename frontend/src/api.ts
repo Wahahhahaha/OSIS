@@ -209,6 +209,66 @@ export const authApi = {
     const response = await api.post(`/admin/periods/${periodId}/elected-pair`, { candidateId });
     return response.data;
   },
+
+  // Roles
+  getRoles: async (): Promise<any[]> => {
+    const response = await api.get('/admin/roles');
+    return response.data;
+  },
+  createRole: async (data: { rolename: string }): Promise<any> => {
+    const response = await api.post('/admin/roles', data);
+    return response.data;
+  },
+  updateRole: async (id: string, data: { rolename: string }): Promise<any> => {
+    const response = await api.put(`/admin/roles/${id}`, data);
+    return response.data;
+  },
+  deleteRole: async (id: string): Promise<any> => {
+    const response = await api.delete(`/admin/roles/${id}`);
+    return response.data;
+  },
+
+  // Sections
+  getSections: async (): Promise<any[]> => {
+    const response = await api.get('/admin/sections');
+    return response.data;
+  },
+  createSection: async (data: { sectionname: string }): Promise<any> => {
+    const response = await api.post('/admin/sections', data);
+    return response.data;
+  },
+  updateSection: async (id: string, data: { sectionname: string }): Promise<any> => {
+    const response = await api.put(`/admin/sections/${id}`, data);
+    return response.data;
+  },
+  deleteSection: async (id: string): Promise<any> => {
+    const response = await api.delete(`/admin/sections/${id}`);
+    return response.data;
+  },
+
+  // Organization Members
+  getOrgMembers: async (): Promise<any[]> => {
+    const response = await api.get('/admin/org-members');
+    return response.data;
+  },
+  createOrgMember: async (data: { studentid: string; roleid: string; periodid: string; sectionid?: string }): Promise<any> => {
+    const response = await api.post('/admin/org-members', data);
+    return response.data;
+  },
+  updateOrgMember: async (id: string, data: { studentid: string; roleid: string; periodid: string; sectionid?: string }): Promise<any> => {
+    const response = await api.put(`/admin/org-members/${id}`, data);
+    return response.data;
+  },
+  deleteOrgMember: async (id: string): Promise<any> => {
+    const response = await api.delete(`/admin/org-members/${id}`);
+    return response.data;
+  },
+
+  // Students (for dropdown)
+  getStudents: async (): Promise<any[]> => {
+    const response = await api.get('/admin/students');
+    return response.data;
+  },
 };
 
 export default api;

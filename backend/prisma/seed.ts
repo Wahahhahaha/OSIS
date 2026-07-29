@@ -43,6 +43,10 @@ async function main() {
     'vice president',
     'teacher',
     'admin',
+    'sekretaris 1',
+    'sekretaris 2',
+    'treasurer 1',
+    'treasurer 2',
   ];
   const roles: Record<string, any> = {};
   for (const name of roleNames) {
@@ -50,6 +54,22 @@ async function main() {
       where: { rolename: name },
       update: {},
       create: { rolename: name },
+    });
+  }
+
+  console.log('Seeding sections...');
+  const sectionNames = [
+    'sekbid mading',
+    'keagamaan islam',
+    'kristen',
+    'keagamaan buddha',
+  ];
+  const sections: Record<string, any> = {};
+  for (const name of sectionNames) {
+    sections[name] = await prisma.section.upsert({
+      where: { sectionname: name },
+      update: {},
+      create: { sectionname: name },
     });
   }
 
@@ -131,7 +151,7 @@ async function main() {
     seededClasses.push(cls);
   }
 
-  console.log('Seeding periods...');
+  console.log('Seeding periods and default prokers...');
   const periodData = [
     { yearLabel: '2024/2025', status: 'INACTIVE' },
     { yearLabel: '2025/2026', status: 'INACTIVE' },
@@ -143,7 +163,7 @@ async function main() {
     const voteStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
     const voteEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2);
 
-    seededPeriods[p.yearLabel] = await prisma.period.upsert({
+    const period = await prisma.period.upsert({
       where: { yearLabel: p.yearLabel },
       update: { status: p.status },
       create: {
@@ -153,6 +173,59 @@ async function main() {
         voteEndDate: voteEnd.toISOString(),
       },
     });
+    seededPeriods[p.yearLabel] = period;
+
+    const startYear = p.yearLabel.split('/')[0];
+    const endYear = p.yearLabel.split('/')[1] || String(Number(startYear) + 1);
+
+    const defaultProkers = [
+      {
+        name: 'MPLS (Masa Pengenalan Lingkungan Sekolah)',
+        description: 'Kegiatan pengenalan lingkungan sekolah bagi siswa baru kelas VII / X.',
+        targetDate: `Juli ${startYear}`,
+      },
+      {
+        name: 'Peringatan HUT RI',
+        description: 'Penyelenggaraan berbagai perlombaan dan upacara bendera dalam rangka memperingati Hari Kemerdekaan Republik Indonesia.',
+        targetDate: `Agustus ${startYear}`,
+      },
+      {
+        name: 'Hari Guru Nasional',
+        description: 'Peringatan Hari Guru Nasional sebagai bentuk apresiasi terhadap jasa para guru.',
+        targetDate: `November ${startYear}`,
+      },
+      {
+        name: 'Classmeet Akhir Tahun (Semester Ganjil)',
+        description: 'Kegiatan perlombaan antar kelas setelah ujian semester ganjil selesai.',
+        targetDate: `Desember ${startYear}`,
+      },
+      {
+        name: 'Classmeet Kenaikan Kelas (Semester Genap)',
+        description: 'Kegiatan perlombaan antar kelas di pertengahan Juni sebelum pembagian rapor kenaikan kelas.',
+        targetDate: `Juni ${endYear}`,
+      },
+    ];
+
+    for (const dp of defaultProkers) {
+      const existingProker = await prisma.proker.findFirst({
+        where: {
+          periodId: period.id,
+          name: dp.name,
+        },
+      });
+
+      if (!existingProker) {
+        await prisma.proker.create({
+          data: {
+            name: dp.name,
+            description: dp.description,
+            targetDate: dp.targetDate,
+            status: 'Rencana',
+            periodId: period.id,
+          },
+        });
+      }
+    }
   }
 
   console.log('Seeding users (other users remain at 1, student has 20)...');
@@ -206,6 +279,7 @@ async function main() {
   await seedSingleSchoolUser('principal', 'principal@example.com', roles['principal'].id);
   await seedSingleSchoolUser('viceprincipal', 'viceprincipal@example.com', roles['viceprincipal'].id);
   await seedSingleSchoolUser('studentaffair', 'studentaffair@example.com', roles['student affair'].id);
+  await seedSingleSchoolUser('school', 'school@example.com', roles['principal'].id);
 
   // Seed default employer user (1 user, password = username)
   const employerUser = await prisma.user.upsert({
@@ -247,12 +321,11 @@ async function main() {
     const targetClass = seededClasses[(i - 1) % seededClasses.length];
     await prisma.student.upsert({
       where: { email },
-      update: { userid: user.id, classid: targetClass.id, roleid: null },
+      update: { userid: user.id, classid: targetClass.id },
       create: {
         userid: user.id,
         email,
         classid: targetClass.id,
-        roleid: null,
       },
     });
     studentUsers.push(user);
@@ -270,12 +343,11 @@ async function main() {
   });
   await prisma.student.upsert({
     where: { email: 'student@example.com' },
-    update: { userid: defaultStudentUser.id, classid: seededClasses[0].id, roleid: null },
+    update: { userid: defaultStudentUser.id, classid: seededClasses[0].id },
     create: {
       userid: defaultStudentUser.id,
       email: 'student@example.com',
       classid: seededClasses[0].id,
-      roleid: null,
     },
   });
 

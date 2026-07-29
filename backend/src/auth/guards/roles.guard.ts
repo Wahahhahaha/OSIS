@@ -18,6 +18,8 @@ export class RolesGuard implements CanActivate {
     if (!user || !user.role) {
       return false;
     }
-    return requiredRoles.includes(user.role);
+    const userRoleLower = user.role.toLowerCase();
+    const requiredRolesLower = requiredRoles.map(r => r.toLowerCase());
+    return requiredRolesLower.includes(userRoleLower);
   }
 }

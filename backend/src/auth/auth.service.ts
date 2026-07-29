@@ -46,18 +46,11 @@ export class AuthService {
         throw new BadRequestException('Kelas tidak ditemukan');
       }
       
-      let roleId: string | null = null;
-      if (dto.rolename) {
-        const role = await this.prisma.role.findUnique({ where: { rolename: dto.rolename } });
-        if (role) roleId = role.id;
-      }
-
       await this.prisma.student.create({
         data: {
           userid: user.id,
           email: dto.email,
           classid: cls.id,
-          roleid: roleId,
         },
       });
     } else if (dto.levelname === 'school') {
@@ -118,23 +111,32 @@ export class AuthService {
     let roleName = '';
     let details: any = null;
 
-    if (user.level.levelname === 'student' && user.students.length > 0) {
+    if (user.level.levelname === 'superadmin') {
+      roleName = 'superadmin';
+    } else if (user.level.levelname === 'student' && user.students.length > 0) {
       const s = user.students[0];
       email = s.email;
-      roleName = s.role?.rolename || 'student';
+
+      const activeMember = s.organizationMembers.find(om => om.period.status.toLowerCase() === 'active') 
+        || s.organizationMembers[0];
+
+      roleName = (activeMember?.role?.rolename || 'student').toLowerCase();
+      const sectionName = activeMember?.section?.sectionname || null;
+
       details = {
         class: s.class.classname,
         grade: s.class.grade.gradename,
         major: s.class.major.majorname,
+        section: sectionName,
       };
     } else if (user.level.levelname === 'school' && user.schools.length > 0) {
       const sc = user.schools[0];
       email = sc.email;
-      roleName = sc.role.rolename;
+      roleName = sc.role.rolename.toLowerCase();
     } else if (user.level.levelname === 'employer' && user.employers.length > 0) {
       const emp = user.employers[0];
       email = emp.email;
-      roleName = emp.role.rolename;
+      roleName = emp.role.rolename.toLowerCase();
     }
 
     return {

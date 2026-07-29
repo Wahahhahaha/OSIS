@@ -11,6 +11,7 @@ import {
   Briefcase, 
   Award,
   BookOpen,
+  Layers,
   Sun,
   Moon,
   Calendar,
@@ -78,6 +79,9 @@ const Dashboard = () => {
     if (path === '/manage-major') return 'manage-major';
     if (path === '/manage-period') return 'manage-period';
     if (path === '/manage-user') return 'manage-user';
+    if (path === '/manage-role') return 'manage-role';
+    if (path === '/manage-section') return 'manage-section';
+    if (path === '/organization' || path === '/organisasi') return 'organization';
     if (path === '/system-setting') return 'system-setting';
     if (path === '/backup-db') return 'backup-db';
     if (path === '/profile') return 'profile';
@@ -194,6 +198,17 @@ const Dashboard = () => {
   const [classes, setClasses] = useState<any[]>([]);
   const [grades, setGrades] = useState<any[]>([]);
   const [majors, setMajors] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
+  const [sections, setSections] = useState<any[]>([]);
+  const [newRolename, setNewRolename] = useState('');
+  const [newSectionname, setNewSectionname] = useState('');
+  const [adminSearch, setAdminSearch] = useState('');
+  const [orgMembers, setOrgMembers] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
+  const [selectedOrgStudentId, setSelectedOrgStudentId] = useState('');
+  const [selectedOrgRoleId, setSelectedOrgRoleId] = useState('');
+  const [selectedOrgPeriodId, setSelectedOrgPeriodId] = useState('');
+  const [selectedOrgSectionId, setSelectedOrgSectionId] = useState('');
   const [periods, setPeriods] = useState<any[]>(() => {
     const saved = localStorage.getItem('osis_periods');
     if (saved) return JSON.parse(saved);
@@ -245,6 +260,16 @@ const Dashboard = () => {
   // Selected period ID for program kerja view
   const [prokerPeriodId, setProkerPeriodId] = useState<string>('');
 
+  // Auto-grow textareas to fit content
+  useEffect(() => {
+    const textareas = document.querySelectorAll('textarea.form-input');
+    textareas.forEach(textarea => {
+      const el = textarea as HTMLTextAreaElement;
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+    });
+  }, [newCandidateVisi, newCandidateMisi, prokerDesc, activeModal]);
+
   // Globally computed active period & selected proker period
   const activePeriod = useMemo(() => {
     return periods.find(p => p.status?.toLowerCase() === 'active') || periods[0];
@@ -284,6 +309,16 @@ const Dashboard = () => {
   // Compute elected candidate for the selected proker period
   const selectedProkerCandidate = useMemo(() => {
     if (!selectedProkerPeriod) return null;
+
+    // If voting is still active (current time is before voteEndDate), do not show elected pengurus yet
+    if (selectedProkerPeriod.voteEndDate) {
+      const now = new Date();
+      const voteEnd = new Date(selectedProkerPeriod.voteEndDate);
+      if (now < voteEnd) {
+        return null;
+      }
+    }
+
     const electedId = electedPairs[selectedProkerPeriod.id] || (selectedProkerWinnerCandidate ? selectedProkerWinnerCandidate.id : undefined);
     return candidates.find(c => c.id === electedId) || selectedProkerWinnerCandidate || null;
   }, [selectedProkerPeriod, candidates, electedPairs, selectedProkerWinnerCandidate]);
@@ -455,6 +490,7 @@ const Dashboard = () => {
   // Load Data depending on view
   useEffect(() => {
     if (!userData) return;
+    setAdminSearch('');
     if (userData.role === 'superadmin') {
       if (activeMenu === 'manage-class') {
         loadClassesData();
@@ -473,6 +509,20 @@ const Dashboard = () => {
       }
       if (activeMenu === 'manage-user') {
         loadClassesData();
+        loadRolesData();
+      }
+      if (activeMenu === 'manage-role') {
+        loadRolesData();
+      }
+      if (activeMenu === 'manage-section') {
+        loadSectionsData();
+      }
+      if (activeMenu === 'organization') {
+        loadOrgMembersData();
+        loadStudentsData();
+        loadRolesData();
+        loadPeriodsData();
+        loadSectionsData();
       }
       if (activeMenu === 'system-setting' && systemSettings) {
         setSysName(systemSettings.systemname || '');
@@ -523,6 +573,24 @@ const Dashboard = () => {
     }
   };
 
+  const loadRolesData = async () => {
+    try {
+      const data = await authApi.getRoles();
+      setRoles(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const loadSectionsData = async () => {
+    try {
+      const data = await authApi.getSections();
+      setSections(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const loadPeriodsData = async () => {
     try {
       const data = await authApi.getPeriods();
@@ -534,6 +602,24 @@ const Dashboard = () => {
       if (savedPeriods) {
         setPeriods(JSON.parse(savedPeriods));
       }
+    }
+  };
+
+  const loadOrgMembersData = async () => {
+    try {
+      const data = await authApi.getOrgMembers();
+      setOrgMembers(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const loadStudentsData = async () => {
+    try {
+      const data = await authApi.getStudents();
+      setStudents(data);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -725,6 +811,127 @@ const Dashboard = () => {
     }
   };
 
+  // Actions for Roles
+  const handleAddRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRolename.trim()) return;
+    try {
+      await authApi.createRole({ rolename: newRolename });
+      setNewRolename('');
+      loadRolesData();
+      showToast('Peran (Role) berhasil ditambahkan!');
+    } catch (e) {
+      console.error(e);
+      alert('Gagal menambahkan peran');
+    }
+  };
+
+  const handleDeleteRole = async (id: string) => {
+    if (!window.confirm('Yakin ingin menghapus peran (Role) ini?')) return;
+    try {
+      await authApi.deleteRole(id);
+      loadRolesData();
+      showToast('Peran (Role) berhasil dihapus!');
+    } catch (e) {
+      console.error(e);
+      alert('Gagal menghapus peran');
+    }
+  };
+
+  // Actions for Sections
+  const handleAddSection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSectionname.trim()) return;
+    try {
+      await authApi.createSection({ sectionname: newSectionname });
+      setNewSectionname('');
+      loadSectionsData();
+      showToast('Sekbid (Section) berhasil ditambahkan!');
+    } catch (e) {
+      console.error(e);
+      alert('Gagal menambahkan sekbid');
+    }
+  };
+
+  const handleDeleteSection = async (id: string) => {
+    if (!window.confirm('Yakin ingin menghapus sekbid (Section) ini?')) return;
+    try {
+      await authApi.deleteSection(id);
+      loadSectionsData();
+      showToast('Sekbid (Section) berhasil dihapus!');
+    } catch (e) {
+      console.error(e);
+      alert('Gagal menghapus sekbid');
+    }
+  };
+
+  // Actions for Organization Members
+  const handleAddOrgMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrgStudentId || !selectedOrgRoleId || !selectedOrgPeriodId) {
+      alert('Harap pilih Siswa, Peran, dan Periode.');
+      return;
+    }
+    try {
+      await authApi.createOrgMember({
+        studentid: selectedOrgStudentId,
+        roleid: selectedOrgRoleId,
+        periodid: selectedOrgPeriodId,
+        sectionid: selectedOrgSectionId || undefined
+      });
+      setSelectedOrgStudentId('');
+      setSelectedOrgRoleId('');
+      setSelectedOrgPeriodId('');
+      setSelectedOrgSectionId('');
+      setActiveModal(null);
+      loadOrgMembersData();
+      showToast('Anggota organisasi berhasil ditambahkan!');
+    } catch (e: any) {
+      console.error(e);
+      alert('Gagal menambahkan anggota organisasi (siswa mungkin sudah memiliki jabatan di periode ini)');
+    }
+  };
+
+  const handleEditOrgMemberSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+    if (!selectedOrgStudentId || !selectedOrgRoleId || !selectedOrgPeriodId) {
+      alert('Harap pilih Siswa, Peran, dan Periode.');
+      return;
+    }
+    try {
+      await authApi.updateOrgMember(editingItem.id, {
+        studentid: selectedOrgStudentId,
+        roleid: selectedOrgRoleId,
+        periodid: selectedOrgPeriodId,
+        sectionid: selectedOrgSectionId || undefined
+      });
+      setSelectedOrgStudentId('');
+      setSelectedOrgRoleId('');
+      setSelectedOrgPeriodId('');
+      setSelectedOrgSectionId('');
+      setEditingItem(null);
+      setActiveModal(null);
+      loadOrgMembersData();
+      showToast('Anggota organisasi berhasil diperbarui!');
+    } catch (e: any) {
+      console.error(e);
+      alert('Gagal memperbarui anggota organisasi (siswa mungkin sudah memiliki jabatan di periode ini)');
+    }
+  };
+
+  const handleDeleteOrgMember = async (id: string) => {
+    if (!window.confirm('Yakin ingin menghapus anggota organisasi ini?')) return;
+    try {
+      await authApi.deleteOrgMember(id);
+      loadOrgMembersData();
+      showToast('Anggota organisasi berhasil dihapus!');
+    } catch (e) {
+      console.error(e);
+      alert('Gagal menghapus anggota organisasi');
+    }
+  };
+
   // Actions for Users
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -903,6 +1110,38 @@ const Dashboard = () => {
     } catch (err: any) {
       console.error(err);
       alert(err.response?.data?.message || 'Gagal mengedit user');
+    }
+  };
+
+  const handleEditRoleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRolename.trim() || !editingItem) return;
+    try {
+      await authApi.updateRole(editingItem.id, { rolename: newRolename });
+      setNewRolename('');
+      setEditingItem(null);
+      setActiveModal(null);
+      loadRolesData();
+      showToast('Peran (Role) berhasil diperbarui!');
+    } catch (err) {
+      console.error(err);
+      alert('Gagal mengedit peran');
+    }
+  };
+
+  const handleEditSectionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSectionname.trim() || !editingItem) return;
+    try {
+      await authApi.updateSection(editingItem.id, { sectionname: newSectionname });
+      setNewSectionname('');
+      setEditingItem(null);
+      setActiveModal(null);
+      loadSectionsData();
+      showToast('Sekbid (Section) berhasil diperbarui!');
+    } catch (err) {
+      console.error(err);
+      alert('Gagal mengedit sekbid');
     }
   };
 
@@ -1541,55 +1780,127 @@ const Dashboard = () => {
                       Mohon maaf, hak suara hanya berlaku bagi akun dengan tingkat akses <strong>Sekolah (School)</strong> dan <strong>Siswa (Student)</strong>. Akun level Employer tidak memiliki hak untuk memilih.
                     </p>
                   </div>
-                ) : userVotedCandidateId ? (
-                  <div style={{ textAlign: 'center', padding: '40px 20px', border: '1px solid var(--success)', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(16,185,129,0) 100%)' }}>
-                    <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'var(--success)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '28px', fontWeight: 'bold' }}>✓</div>
-                    <h3 style={{ color: 'var(--success)', fontWeight: 800 }}>Hak Suara Berhasil Disalurkan!</h3>
-                    <p style={{ marginTop: '8px', color: 'var(--text-dark)' }}>Terima kasih atas partisipasi Anda dalam pemilihan Ketua & Wakil Ketua OSIS Periode {activePeriod.yearLabel}.</p>
-                    
-                    {userVotedCandidate && (
-                      <div style={{ marginTop: '24px', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', padding: '16px 32px', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '12px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Pilihan Anda:</span>
-                        <img src={userVotedCandidate.photo || 'https://via.placeholder.com/80'} alt="Pilihan" style={{ width: '80px', height: '80px', borderRadius: '10px', objectFit: 'cover', marginBottom: '12px' }} />
-                        <span style={{ fontSize: '12px', fontWeight: 700, background: 'rgba(16,185,129,0.1)', color: 'var(--success)', padding: '4px 10px', borderRadius: '6px', marginBottom: '6px' }}>PASLON {userVotedCandidate.paslonNo}</span>
-                        <strong style={{ fontSize: '15px', color: 'var(--primary-navy)' }}>{userVotedCandidate.name}</strong>
+                                ) : (
+                  <>
+                    {userVotedCandidateId && (
+                      <div style={{ textAlign: 'center', padding: '24px 20px', border: '1px solid var(--success)', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(16,185,129,0) 100%)', marginBottom: '24px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', color: 'var(--success)' }}>
+                          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--success)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: 'bold' }}>✓</div>
+                          <h3 style={{ margin: 0, fontWeight: 800 }}>Hak Suara Anda Telah Disalurkan!</h3>
+                        </div>
+                        <p style={{ marginTop: '8px', marginBottom: 0, color: 'var(--text-dark)', fontSize: '14px' }}>
+                          Terima kasih atas partisipasi Anda dalam pemilihan Ketua & Wakil Ketua OSIS Periode {activePeriod.yearLabel}. Pilihan Anda adalah <strong>{userVotedCandidate?.name || 'Paslon'}</strong>.
+                        </p>
                       </div>
                     )}
-                  </div>
-                ) : (
-                  <>
-                    <p style={{ fontSize: '15px', color: 'var(--text-dark)', marginBottom: '24px', textAlign: 'center' }}>
-                      Silakan pelajari visi-misi pasangan calon di bawah ini dan tentukan pilihan terbaik Anda.
-                    </p>
+
+                    {!userVotedCandidateId && (
+                      <p style={{ fontSize: '15px', color: 'var(--text-dark)', marginBottom: '24px', textAlign: 'center' }}>
+                        Silakan pelajari visi-misi pasangan calon di bawah ini dan tentukan pilihan terbaik Anda.
+                      </p>
+                    )}
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
-                      {activePeriodCandidates.map(c => (
-                        <div key={c.id} className="theme-card animate-slideup" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', border: '1px solid var(--card-border)', textAlign: 'left', borderRadius: '12px', background: 'var(--card-bg)' }}>
-                          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                            <img src={c.photo || 'https://via.placeholder.com/64'} alt={c.name} style={{ width: '64px', height: '64px', borderRadius: '10px', objectFit: 'cover', border: '1px solid var(--card-border)' }} />
-                            <div>
-                              <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', background: 'rgba(37,99,235,0.08)', color: 'var(--secondary-blue)', borderRadius: '6px', display: 'inline-block', marginBottom: '4px' }}>
-                                PASLON {c.paslonNo}
-                              </span>
-                              <h3 style={{ margin: 0, fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700 }}>{c.name}</h3>
-                              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{c.classes}</span>
-                            </div>
-                          </div>
-
-                          <div style={{ fontSize: '13px', borderTop: '1px solid var(--card-border)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px', flexGrow: 1 }}>
-                            <div><strong>Visi:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.visi}</span></div>
-                            {c.misi && <div><strong>Misi:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.misi}</span></div>}
-                          </div>
-
-                          <button 
-                            onClick={() => handleCastVote(c.id, activePeriod.id)}
-                            className="btn-primary-sm"
-                            style={{ width: '100%', padding: '10px', fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                      {activePeriodCandidates.map(c => {
+                        const isUserChoice = userVotedCandidateId === c.id;
+                        return (
+                          <div 
+                            key={c.id} 
+                            className="theme-card animate-slideup" 
+                            style={{ 
+                              padding: '24px', 
+                              display: 'flex', 
+                              flexDirection: 'column', 
+                              gap: '16px', 
+                              border: isUserChoice ? '2px solid var(--success)' : '1px solid var(--card-border)', 
+                              textAlign: 'left', 
+                              borderRadius: '12px', 
+                              background: 'var(--card-bg)',
+                              position: 'relative'
+                            }}
                           >
-                            PILIH PASLON {c.paslonNo}
-                          </button>
-                        </div>
-                      ))}
+                            {isUserChoice && (
+                              <div style={{ position: 'absolute', top: '-12px', right: '16px', background: 'var(--success)', color: 'white', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 800, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                                👑 Pilihan Anda
+                              </div>
+                            )}
+
+                            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                              <img src={c.photo || 'https://via.placeholder.com/64'} alt={c.name} style={{ width: '64px', height: '64px', borderRadius: '10px', objectFit: 'cover', border: '1px solid var(--card-border)' }} />
+                              <div>
+                                <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', background: 'rgba(37,99,235,0.08)', color: 'var(--secondary-blue)', borderRadius: '6px', display: 'inline-block', marginBottom: '4px' }}>
+                                  PASLON {c.paslonNo}
+                                </span>
+                                <h3 style={{ margin: 0, fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700 }}>{c.name}</h3>
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{c.classes}</span>
+                              </div>
+                            </div>
+
+                            <div style={{ fontSize: '13px', borderTop: '1px solid var(--card-border)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px', flexGrow: 1 }}>
+                              <div><strong>Visi:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.visi}</span></div>
+                              {c.misi && <div><strong>Misi:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.misi}</span></div>}
+                            </div>
+
+                            {userVotedCandidateId ? (
+                              isUserChoice ? (
+                                <button 
+                                  type="button"
+                                  disabled
+                                  className="btn-primary-sm"
+                                  style={{ 
+                                    width: '100%', 
+                                    padding: '10px', 
+                                    fontSize: '14px', 
+                                    fontWeight: 700, 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    gap: '8px',
+                                    background: 'var(--success)',
+                                    borderColor: 'var(--success)',
+                                    color: '#fff',
+                                    cursor: 'not-allowed',
+                                    opacity: 0.95
+                                  }}
+                                >
+                                  Pilihan Anda ✓
+                                </button>
+                              ) : (
+                                <button 
+                                  type="button"
+                                  disabled
+                                  className="btn-secondary-sm"
+                                  style={{ 
+                                    width: '100%', 
+                                    padding: '10px', 
+                                    fontSize: '14px', 
+                                    fontWeight: 700, 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    gap: '8px',
+                                    background: 'var(--bg-soft-white)',
+                                    borderColor: 'var(--card-border)',
+                                    color: 'var(--text-muted)',
+                                    cursor: 'not-allowed',
+                                    opacity: 0.6
+                                  }}
+                                >
+                                  Pilih Paslon {c.paslonNo}
+                                </button>
+                              )
+                            ) : (
+                              <button 
+                                onClick={() => handleCastVote(c.id, activePeriod.id)}
+                                className="btn-primary-sm"
+                                style={{ width: '100%', padding: '10px', fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                              >
+                                PILIH PASLON {c.paslonNo}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
 
                       {activePeriodCandidates.length === 0 && (
                         <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
@@ -1751,6 +2062,27 @@ const Dashboard = () => {
           return matchesPeriod && matchesCandidate;
         }) : [];
 
+        const getChronologicalValue = (targetDate: string) => {
+          const months = ['jan', 'feb', 'mar', 'apr', 'mei', 'jun', 'jul', 'agu', 'sep', 'okt', 'nov', 'des'];
+          const normalized = targetDate.toLowerCase();
+          const yearMatch = normalized.match(/\b(20\d{2})\b/);
+          const year = yearMatch ? parseInt(yearMatch[1], 10) : 9999;
+          
+          let monthIndex = 12;
+          for (let i = 0; i < months.length; i++) {
+            if (normalized.includes(months[i]) || 
+                (months[i] === 'des' && normalized.includes('dec')) || 
+                (months[i] === 'mei' && normalized.includes('may')) || 
+                (months[i] === 'agu' && normalized.includes('aug'))) {
+              monthIndex = i;
+              break;
+            }
+          }
+          return year * 12 + monthIndex;
+        };
+
+        const sortedProkers = periodProkers.slice().sort((a, b) => getChronologicalValue(a.targetDate) - getChronologicalValue(b.targetDate));
+
         const totalPro = periodProkers.length;
         const rencanaPro = periodProkers.filter(p => p.status === 'Rencana').length;
         const berjalanPro = periodProkers.filter(p => p.status === 'Berjalan').length;
@@ -1820,12 +2152,6 @@ const Dashboard = () => {
                   </div>
                   
                   <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <img 
-                      src={selectedProkerCandidate.photo || 'https://via.placeholder.com/64'} 
-                      alt="Pengurus" 
-                      style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', border: '1px solid var(--card-border)' }} 
-                    />
-                    
                     <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap', alignItems: 'center' }}>
                       {/* President Role */}
                       <div>
@@ -1857,9 +2183,13 @@ const Dashboard = () => {
               ) : (
                 <div className="theme-card" style={{ padding: '24px', border: '1px dashed var(--card-border)', textAlign: 'center', borderRadius: '12px' }}>
                   <p style={{ color: 'var(--text-muted)', fontSize: '14px', margin: 0 }}>
-                    Belum ada pengurus OSIS terpilih yang ditetapkan menjabat untuk periode yang dipilih ({selectedProkerPeriod ? selectedProkerPeriod.yearLabel : '-'}).
+                    {selectedProkerPeriod?.voteEndDate && new Date() < new Date(selectedProkerPeriod.voteEndDate) ? (
+                      `Pemilihan Ketua & Wakil Ketua OSIS Periode ${selectedProkerPeriod.yearLabel} masih berlangsung. Pengurus terpilih akan tampil setelah masa voting berakhir.`
+                    ) : (
+                      `Belum ada pengurus OSIS terpilih yang ditetapkan menjabat untuk periode yang dipilih (${selectedProkerPeriod ? selectedProkerPeriod.yearLabel : '-'}).`
+                    )}
                   </p>
-                  {userData.role === 'superadmin' && (
+                  {userData.role === 'superadmin' && !(selectedProkerPeriod?.voteEndDate && new Date() < new Date(selectedProkerPeriod.voteEndDate)) && (
                     <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: '4px 0 0' }}>
                       Silakan pilih Pasangan Terpilih pada dropdown di atas untuk mulai menyusun program kerja.
                     </p>
@@ -1894,64 +2224,75 @@ const Dashboard = () => {
                     Daftar Rencana Program Kerja OSIS
                   </h3>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {periodProkers.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', border: '1px solid var(--card-border)', borderRadius: '12px' }}>
+                  <div className="proker-timeline">
+                    {sortedProkers.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '12px' }}>
                         Belum ada program kerja yang disusun untuk periode ini.
                       </div>
                     ) : (
-                      periodProkers.map(p => (
-                        <div key={p.id} className="theme-card animate-slideup" style={{ padding: '20px', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '12px', position: 'relative' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', paddingRight: userData.role === 'superadmin' ? '80px' : '0' }}>
-                            <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--primary-navy)' }}>
-                              {p.name}
-                            </h4>
-                            
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                Target: <strong>{p.targetDate}</strong>
-                              </span>
-                              
-                              {p.status === 'Rencana' && (
-                                <span className="badge badge-secondary" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px' }}>Rencana</span>
+                      sortedProkers.map(p => {
+                        let dotClass = 'status-rencana';
+                        if (p.status === 'Berjalan') dotClass = 'status-berjalan';
+                        if (p.status === 'Selesai') dotClass = 'status-selesai';
+
+                        return (
+                          <div key={p.id} className="proker-timeline-item">
+                            <div className={`proker-timeline-dot ${dotClass}`} />
+                            <div className="proker-timeline-content">
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', paddingRight: userData.role === 'superadmin' ? '80px' : '0' }}>
+                                <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--primary-navy)' }}>
+                                  {p.name}
+                                </h4>
+                                
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                    Target: <strong>{p.targetDate}</strong>
+                                  </span>
+                                  
+                                  {p.status === 'Rencana' && (
+                                    <span className="badge badge-secondary" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px' }}>Rencana</span>
+                                  )}
+                                  {p.status === 'Berjalan' && (
+                                    <span className="badge badge-warning" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--warning)' }}>Berjalan</span>
+                                  )}
+                                  {p.status === 'Selesai' && (
+                                    <span className="badge badge-success" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--success)' }}>Selesai</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {p.description && (
+                                <p style={{ margin: '8px 0 0', fontSize: '13px', color: 'var(--text-dark)', lineHeight: '1.5' }}>
+                                  {p.description}
+                                </p>
                               )}
-                              {p.status === 'Berjalan' && (
-                                <span className="badge badge-warning" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--warning)' }}>Berjalan</span>
-                              )}
-                              {p.status === 'Selesai' && (
-                                <span className="badge badge-success" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--success)' }}>Selesai</span>
+
+                              {userData.role === 'superadmin' && (
+                                <div style={{ position: 'absolute', top: '16px', right: '16px', display: 'flex', gap: '6px' }}>
+                                  <button 
+                                    onClick={() => handleStartEditProker(p)} 
+                                    className="action-btn action-btn-warning"
+                                    style={{ padding: '4px 8px' }}
+                                    title="Edit Proker"
+                                    type="button"
+                                  >
+                                    <Edit2 size={12} />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteProker(p.id)} 
+                                    className="action-btn action-btn-danger"
+                                    style={{ padding: '4px 8px' }}
+                                    title="Hapus Proker"
+                                    type="button"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </div>
-
-                          {p.description && (
-                            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-dark)', lineHeight: '1.5' }}>
-                              {p.description}
-                            </p>
-                          )}
-
-                          {userData.role === 'superadmin' && (
-                            <div style={{ position: 'absolute', top: '16px', right: '16px', display: 'flex', gap: '6px' }}>
-                              <button 
-                                onClick={() => handleStartEditProker(p)} 
-                                className="action-btn action-btn-warning"
-                                style={{ padding: '4px 8px' }}
-                                title="Edit Proker"
-                              >
-                                <Edit2 size={12} />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteProker(p.id)} 
-                                className="action-btn action-btn-danger"
-                                style={{ padding: '4px 8px' }}
-                                title="Hapus Proker"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </>
@@ -1962,7 +2303,13 @@ const Dashboard = () => {
       }
 
 
-      case 'manage-class':
+      case 'manage-class': {
+        const filteredClasses = classes.filter(c => 
+          c.classname.toLowerCase().includes(adminSearch.toLowerCase()) ||
+          (c.grade?.gradename || '').toLowerCase().includes(adminSearch.toLowerCase()) ||
+          (c.major?.majorname || '').toLowerCase().includes(adminSearch.toLowerCase()) ||
+          (c.major?.majorcode || '').toLowerCase().includes(adminSearch.toLowerCase())
+        );
         return (
           <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
@@ -1978,6 +2325,20 @@ const Dashboard = () => {
               Kelola data kelas terdaftar dalam sistem.
             </p>
 
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
+                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Cari kelas, grade, jurusan..." 
+                  style={{ paddingLeft: '40px', margin: 0 }}
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
             <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
               <table className="admin-table">
                 <thead>
@@ -1989,7 +2350,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {classes.map(c => (
+                  {filteredClasses.map(c => (
                     <tr key={c.id}>
                       <td style={{ fontWeight: 600 }}>{c.classname}</td>
                       <td>{c.grade?.gradename}</td>
@@ -2020,8 +2381,12 @@ const Dashboard = () => {
             </div>
           </div>
         );
+      }
 
-      case 'manage-grade':
+      case 'manage-grade': {
+        const filteredGrades = grades.filter(g => 
+          g.gradename.toLowerCase().includes(adminSearch.toLowerCase())
+        );
         return (
           <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
@@ -2037,7 +2402,21 @@ const Dashboard = () => {
               Pengaturan tingkatan kelas aktif dalam sekolah.
             </p>
 
-            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto', maxWidth: '400px' }}>
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
+                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Cari grade..." 
+                  style={{ paddingLeft: '40px', margin: 0 }}
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
               <table className="admin-table">
                 <thead>
                   <tr>
@@ -2046,7 +2425,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {grades.map(g => (
+                  {filteredGrades.map(g => (
                     <tr key={g.id}>
                       <td style={{ fontWeight: 600 }}>{g.gradename}</td>
                       <td>
@@ -2063,13 +2442,23 @@ const Dashboard = () => {
                       </td>
                     </tr>
                   ))}
+                  {filteredGrades.length === 0 && (
+                    <tr>
+                      <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data grade.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         );
+      }
 
-      case 'manage-major':
+      case 'manage-major': {
+        const filteredMajors = majors.filter(m => 
+          m.majorname.toLowerCase().includes(adminSearch.toLowerCase()) ||
+          m.majorcode.toLowerCase().includes(adminSearch.toLowerCase())
+        );
         return (
           <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
@@ -2085,6 +2474,20 @@ const Dashboard = () => {
               Pengaturan data jurusan sekolah terdaftar.
             </p>
 
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
+                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Cari jurusan..." 
+                  style={{ paddingLeft: '40px', margin: 0 }}
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
             <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
               <table className="admin-table">
                 <thead>
@@ -2095,7 +2498,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {majors.map(m => (
+                  {filteredMajors.map(m => (
                     <tr key={m.id}>
                       <td style={{ fontWeight: 700 }}>{m.majorcode}</td>
                       <td>{m.majorname}</td>
@@ -2114,11 +2517,159 @@ const Dashboard = () => {
                       </td>
                     </tr>
                   ))}
+                  {filteredMajors.length === 0 && (
+                    <tr>
+                      <td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data jurusan.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         );
+      }
+
+      case 'manage-role': {
+        const filteredRoles = roles.filter(r => 
+          r.rolename.toLowerCase().includes(adminSearch.toLowerCase())
+        );
+        return (
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
+              <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
+                <Award size={20} color="var(--secondary-blue)" />
+                Kelola Data Peran (Role)
+              </h2>
+              <button onClick={() => setActiveModal('add-role')} className="btn-primary-sm">
+                <Plus size={16} /> Tambah Role
+              </button>
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
+              Pengaturan peran/jabatan dalam kepengurusan sekolah dan OSIS.
+            </p>
+
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
+                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Cari peran..." 
+                  style={{ paddingLeft: '40px', margin: 0 }}
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Nama Role</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRoles.map(r => (
+                    <tr key={r.id}>
+                      <td style={{ fontWeight: 600 }}>{r.rolename}</td>
+                      <td>
+                        <button onClick={() => {
+                          setEditingItem(r);
+                          setNewRolename(r.rolename);
+                          setActiveModal('edit-role');
+                        }} className="action-btn" style={{ marginRight: '8px' }}>
+                          <Edit2 size={13} /> Edit
+                        </button>
+                        <button onClick={() => handleDeleteRole(r.id)} className="action-btn action-btn-danger">
+                          <Trash2 size={13} /> Hapus
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredRoles.length === 0 && (
+                    <tr>
+                      <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data peran (role).</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+
+      case 'manage-section': {
+        const filteredSections = sections.filter(s => 
+          s.sectionname.toLowerCase().includes(adminSearch.toLowerCase())
+        );
+        return (
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
+              <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
+                <Layers size={20} color="var(--secondary-blue)" />
+                Kelola Data Sekbid (Section)
+              </h2>
+              <button onClick={() => setActiveModal('add-section')} className="btn-primary-sm">
+                <Plus size={16} /> Tambah Sekbid
+              </button>
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
+              Pengaturan sekbid (seksi bidang) kepengurusan OSIS.
+            </p>
+
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
+                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Cari sekbid..." 
+                  style={{ paddingLeft: '40px', margin: 0 }}
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Nama Sekbid</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSections.map(s => (
+                    <tr key={s.id}>
+                      <td style={{ fontWeight: 600 }}>{s.sectionname}</td>
+                      <td>
+                        <button onClick={() => {
+                          setEditingItem(s);
+                          setNewSectionname(s.sectionname);
+                          setActiveModal('edit-section');
+                        }} className="action-btn" style={{ marginRight: '8px' }}>
+                          <Edit2 size={13} /> Edit
+                        </button>
+                        <button onClick={() => handleDeleteSection(s.id)} className="action-btn action-btn-danger">
+                          <Trash2 size={13} /> Hapus
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredSections.length === 0 && (
+                    <tr>
+                      <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data sekbid (section).</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
 
       case 'manage-period': {
         const formatDatetime = (dtStr: string) => {
@@ -2135,6 +2686,11 @@ const Dashboard = () => {
             return dtStr;
           }
         };
+
+        const filteredPeriods = periods.filter(p => 
+          p.yearLabel.toLowerCase().includes(adminSearch.toLowerCase()) ||
+          p.status.toLowerCase().includes(adminSearch.toLowerCase())
+        );
 
         return (
           <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
@@ -2156,6 +2712,21 @@ const Dashboard = () => {
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
               Pengaturan tahun ajaran periode kepengurusan OSIS dan rentang durasi pelaksanaan voting.
             </p>
+
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
+                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Cari periode, status..." 
+                  style={{ paddingLeft: '40px', margin: 0 }}
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
             <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
               <table className="admin-table">
                 <thead>
@@ -2168,7 +2739,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {periods.map(p => (
+                  {filteredPeriods.map(p => (
                     <tr key={p.id}>
                       <td style={{ fontWeight: 600 }}>{p.yearLabel}</td>
                       <td>
@@ -2192,6 +2763,11 @@ const Dashboard = () => {
                       </td>
                     </tr>
                   ))}
+                  {filteredPeriods.length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data periode.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -2199,7 +2775,13 @@ const Dashboard = () => {
         );
       }
 
-      case 'manage-user':
+      case 'manage-user': {
+        const filteredUsers = users.filter(u => 
+          u.username.toLowerCase().includes(adminSearch.toLowerCase()) ||
+          u.level.toLowerCase().includes(adminSearch.toLowerCase()) ||
+          (u.email || '').toLowerCase().includes(adminSearch.toLowerCase()) ||
+          (u.role || '').toLowerCase().includes(adminSearch.toLowerCase())
+        );
         return (
           <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
@@ -2214,6 +2796,21 @@ const Dashboard = () => {
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
               Daftar seluruh akun pengguna yang terdaftar di database sistem beserta level aksesnya.
             </p>
+
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
+                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Cari user, email, role..." 
+                  style={{ paddingLeft: '40px', margin: 0 }}
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
             <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
               <table className="admin-table">
                 <thead>
@@ -2226,7 +2823,7 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map(u => (
+                  {filteredUsers.map(u => (
                     <tr key={u.id}>
                       <td style={{ fontWeight: 600 }}>{u.username}</td>
                       <td>
@@ -2259,11 +2856,125 @@ const Dashboard = () => {
                       </td>
                     </tr>
                   ))}
+                  {filteredUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data user.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         );
+      }
+
+      case 'organization': {
+        const filteredOrgMembers = orgMembers.filter(m => {
+          const studentName = m.student?.user?.username || '';
+          const className = m.student?.class?.classname || '';
+          const roleName = m.role?.rolename || '';
+          const periodLabel = m.period?.yearLabel || '';
+          const sectionName = m.section?.sectionname || '';
+          
+          return studentName.toLowerCase().includes(adminSearch.toLowerCase()) ||
+            className.toLowerCase().includes(adminSearch.toLowerCase()) ||
+            roleName.toLowerCase().includes(adminSearch.toLowerCase()) ||
+            periodLabel.toLowerCase().includes(adminSearch.toLowerCase()) ||
+            sectionName.toLowerCase().includes(adminSearch.toLowerCase());
+        });
+
+        return (
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
+              <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
+                <Users size={20} color="var(--secondary-blue)" />
+                Kelola Anggota Organisasi OSIS
+              </h2>
+              {userData.role === 'superadmin' && (
+                <button onClick={() => {
+                  setSelectedOrgStudentId('');
+                  setSelectedOrgRoleId('');
+                  setSelectedOrgPeriodId('');
+                  setSelectedOrgSectionId('');
+                  setEditingItem(null);
+                  setActiveModal('add-org-member');
+                }} className="btn-primary-sm">
+                  <Plus size={16} /> Tambah Anggota
+                </button>
+              )}
+            </div>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
+              Petakan jabatan OSIS (selain Ketua dan Wakil Ketua) untuk murid-murid di setiap periode kepengurusan.
+            </p>
+
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
+                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Cari murid, kelas, jabatan, sekbid..." 
+                  style={{ paddingLeft: '40px', margin: 0 }}
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Nama Murid</th>
+                    <th>Kelas</th>
+                    <th>Jabatan OSIS</th>
+                    <th>Sekbid</th>
+                    <th>Periode</th>
+                    {userData.role === 'superadmin' && <th>Aksi</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrgMembers.map(m => (
+                    <tr key={m.id}>
+                      <td style={{ fontWeight: 600 }}>{m.student?.user?.username || '-'}</td>
+                      <td>{m.student?.class?.classname || '-'}</td>
+                      <td style={{ textTransform: 'capitalize' }}>
+                        <span className="badge badge-student">{m.role?.rolename || '-'}</span>
+                      </td>
+                      <td>{m.section?.sectionname || '-'}</td>
+                      <td>
+                        <span className="badge badge-employer">{m.period?.yearLabel || '-'}</span>
+                      </td>
+                      {userData.role === 'superadmin' && (
+                        <td>
+                          <button onClick={() => {
+                            setEditingItem(m);
+                            setSelectedOrgStudentId(m.studentid);
+                            setSelectedOrgRoleId(m.roleid);
+                            setSelectedOrgPeriodId(m.periodid);
+                            setSelectedOrgSectionId(m.sectionid || '');
+                            setActiveModal('edit-org-member');
+                          }} className="action-btn" style={{ marginRight: '8px' }}>
+                            <Edit2 size={13} /> Edit
+                          </button>
+                          <button onClick={() => handleDeleteOrgMember(m.id)} className="action-btn action-btn-danger">
+                            <Trash2 size={13} /> Hapus
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                  {filteredOrgMembers.length === 0 && (
+                    <tr>
+                      <td colSpan={userData.role === 'superadmin' ? 6 : 5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data anggota organisasi.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
 
       case 'system-setting':
         return (
@@ -2760,6 +3471,10 @@ const Dashboard = () => {
             <div className={`sidebar-item ${activeMenu === 'proker' ? 'active' : ''}`} onClick={() => navigate('/proker')}>
               <Briefcase size={16} /> Program Kerja
             </div>
+
+            <div className={`sidebar-item ${activeMenu === 'organization' ? 'active' : ''}`} onClick={() => navigate('/organization')}>
+              <UserIcon size={16} /> Organization
+            </div>
           </div>
 
           {/* Manage Data Accordion */}
@@ -2792,6 +3507,12 @@ const Dashboard = () => {
                   </div>
                   <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-user' ? 'active' : ''}`} onClick={() => navigate('/manage-user')}>
                     Manage User
+                  </div>
+                  <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-role' ? 'active' : ''}`} onClick={() => navigate('/manage-role')}>
+                    Manage Role
+                  </div>
+                  <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-section' ? 'active' : ''}`} onClick={() => navigate('/manage-section')}>
+                    Manage Section
                   </div>
                 </div>
               )}
@@ -2901,6 +3622,8 @@ const Dashboard = () => {
                 {activeModal === 'add-candidate' && 'Tambah Kandidat OSIS Baru'}
                 {activeModal === 'add-proker' && 'Tambah Program Kerja OSIS'}
                 {activeModal === 'edit-proker' && 'Edit Program Kerja OSIS'}
+                {activeModal === 'add-org-member' && 'Tambah Anggota Organisasi'}
+                {activeModal === 'edit-org-member' && 'Edit Anggota Organisasi'}
               </h3>
               <button className="modal-close-btn" onClick={() => {
                 setActiveModal(null);
@@ -2957,6 +3680,32 @@ const Dashboard = () => {
                 <div className="form-group">
                   <label className="form-label">Nama Lengkap Jurusan</label>
                   <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: Rekayasa Perangkat Lunak" value={newMajorname} onChange={e => setNewMajorname(e.target.value)} required />
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Batal</button>
+                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                </div>
+              </form>
+            )}
+
+            {activeModal === 'add-role' && (
+              <form onSubmit={handleAddRole} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+                <div className="form-group">
+                  <label className="form-label">Nama Peran (Role)</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: sekretaris 1" value={newRolename} onChange={e => setNewRolename(e.target.value)} required />
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Batal</button>
+                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                </div>
+              </form>
+            )}
+
+            {activeModal === 'add-section' && (
+              <form onSubmit={handleAddSection} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+                <div className="form-group">
+                  <label className="form-label">Nama Sekbid (Section)</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: sekbid mading" value={newSectionname} onChange={e => setNewSectionname(e.target.value)} required />
                 </div>
                 <div className="modal-actions">
                   <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Batal</button>
@@ -3047,11 +3796,9 @@ const Dashboard = () => {
                       <label className="form-label">Role OSIS (Opsional)</label>
                       <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)}>
                         <option value="">Bukan Pengurus (null)</option>
-                        <option value="members">Members</option>
-                        <option value="president">President</option>
-                        <option value="vice president">Vice President</option>
-                        <option value="treasurer">Treasurer</option>
-                        <option value="secretaris">Secretaris</option>
+                        {roles.map(r => (
+                          <option key={r.id} value={r.rolename}>{r.rolename}</option>
+                        ))}
                       </select>
                     </div>
                   </>
@@ -3062,10 +3809,9 @@ const Dashboard = () => {
                     <label className="form-label">Jabatan Sekolah (Role)</label>
                     <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)} required>
                       <option value="">Pilih Jabatan</option>
-                      <option value="principal">Principal (Kepala Sekolah)</option>
-                      <option value="viceprincipal">Vice Principal (Wakil Kepsek)</option>
-                      <option value="student affair">Student Affair (Kesiswaan)</option>
-                      <option value="teacher">Teacher (Guru)</option>
+                      {roles.map(r => (
+                        <option key={r.id} value={r.rolename}>{r.rolename}</option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -3074,7 +3820,10 @@ const Dashboard = () => {
                   <div className="form-group">
                     <label className="form-label">Jabatan Mitra (Role)</label>
                     <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)} required>
-                      <option value="members">Members (Anggota)</option>
+                      <option value="">Pilih Jabatan</option>
+                      {roles.map(r => (
+                        <option key={r.id} value={r.rolename}>{r.rolename}</option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -3143,6 +3892,32 @@ const Dashboard = () => {
               </form>
             )}
 
+            {activeModal === 'edit-role' && (
+              <form onSubmit={handleEditRoleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+                <div className="form-group">
+                  <label className="form-label">Nama Peran (Role)</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: sekretaris 1" value={newRolename} onChange={e => setNewRolename(e.target.value)} required />
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
+                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                </div>
+              </form>
+            )}
+
+            {activeModal === 'edit-section' && (
+              <form onSubmit={handleEditSectionSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+                <div className="form-group">
+                  <label className="form-label">Nama Sekbid (Section)</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: sekbid mading" value={newSectionname} onChange={e => setNewSectionname(e.target.value)} required />
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
+                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                </div>
+              </form>
+            )}
+
 
 
             {activeModal === 'edit-user' && (
@@ -3177,11 +3952,9 @@ const Dashboard = () => {
                       <label className="form-label">Role OSIS (Opsional)</label>
                       <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)}>
                         <option value="">Bukan Pengurus (null)</option>
-                        <option value="members">Members</option>
-                        <option value="president">President</option>
-                        <option value="vice president">Vice President</option>
-                        <option value="treasurer">Treasurer</option>
-                        <option value="secretaris">Secretaris</option>
+                        {roles.map(r => (
+                          <option key={r.id} value={r.rolename}>{r.rolename}</option>
+                        ))}
                       </select>
                     </div>
                   </>
@@ -3192,10 +3965,9 @@ const Dashboard = () => {
                     <label className="form-label">Jabatan Sekolah (Role)</label>
                     <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)} required>
                       <option value="">Pilih Jabatan</option>
-                      <option value="principal">Principal (Kepala Sekolah)</option>
-                      <option value="viceprincipal">Vice Principal (Wakil Kepsek)</option>
-                      <option value="student affair">Student Affair (Kesiswaan)</option>
-                      <option value="teacher">Teacher (Guru)</option>
+                      {roles.map(r => (
+                        <option key={r.id} value={r.rolename}>{r.rolename}</option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -3204,7 +3976,10 @@ const Dashboard = () => {
                   <div className="form-group">
                     <label className="form-label">Jabatan Mitra (Role)</label>
                     <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)} required>
-                      <option value="members">Members (Anggota)</option>
+                      <option value="">Pilih Jabatan</option>
+                      {roles.map(r => (
+                        <option key={r.id} value={r.rolename}>{r.rolename}</option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -3388,6 +4163,80 @@ const Dashboard = () => {
                 </div>
               </form>
             )}
+
+            {(activeModal === 'add-org-member' || activeModal === 'edit-org-member') && (
+              <form onSubmit={activeModal === 'edit-org-member' ? handleEditOrgMemberSubmit : handleAddOrgMember} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+                <div className="form-group">
+                  <label className="form-label">Pilih Murid (Student)</label>
+                  <select 
+                    className="form-input" 
+                    style={{ paddingLeft: '16px' }} 
+                    value={selectedOrgStudentId} 
+                    onChange={e => setSelectedOrgStudentId(e.target.value)}
+                    required
+                  >
+                    <option value="">Pilih Murid</option>
+                    {students.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {`${s.user?.username || ''} (${s.class?.grade?.gradename || ''} ${s.class?.major?.majorcode || ''} ${s.class?.classname || ''})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Pilih Jabatan (Role)</label>
+                  <select 
+                    className="form-input" 
+                    style={{ paddingLeft: '16px' }} 
+                    value={selectedOrgRoleId} 
+                    onChange={e => setSelectedOrgRoleId(e.target.value)}
+                    required
+                  >
+                    <option value="">Pilih Jabatan</option>
+                    {roles.map(r => (
+                      <option key={r.id} value={r.id}>{r.rolename}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Pilih Periode Kepengurusan</label>
+                  <select 
+                    className="form-input" 
+                    style={{ paddingLeft: '16px' }} 
+                    value={selectedOrgPeriodId} 
+                    onChange={e => setSelectedOrgPeriodId(e.target.value)}
+                    required
+                  >
+                    <option value="">Pilih Periode</option>
+                    {periods.map(p => (
+                      <option key={p.id} value={p.id}>{p.yearLabel}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Pilih Sekbid (Opsional)</label>
+                  <select 
+                    className="form-input" 
+                    style={{ paddingLeft: '16px' }} 
+                    value={selectedOrgSectionId} 
+                    onChange={e => setSelectedOrgSectionId(e.target.value)}
+                  >
+                    <option value="">Tanpa Sekbid (null)</option>
+                    {sections.map(s => (
+                      <option key={s.id} value={s.id}>{s.sectionname}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="modal-actions">
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
+                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -3502,6 +4351,11 @@ const Login = () => {
     setTheme(nextTheme);
     document.documentElement.setAttribute('data-theme', nextTheme);
     localStorage.setItem('theme', nextTheme);
+  };
+
+  const handleQuickLogin = (usr: string, pass: string) => {
+    setUsername(usr);
+    setPassword(pass);
   };
 
   // Redirect if already logged in and fetch system settings
@@ -3644,22 +4498,48 @@ const Login = () => {
         </form>
 
         <div className="demo-accounts">
-          <p>Demo akun (username / password):</p>
-          <div className="demo-account-row">
-            <span>Superadmin</span>
-            <code>superadmin / password123</code>
-          </div>
-          <div className="demo-account-row">
-            <span>Siswa (Student)</span>
-            <code>student / password123</code>
-          </div>
-          <div className="demo-account-row">
-            <span>Sekolah (School)</span>
-            <code>school / password123</code>
-          </div>
-          <div className="demo-account-row">
-            <span>Mitra (Employer)</span>
-            <code>employer / password123</code>
+          <p>Demo akun (Klik untuk mengisi):</p>
+          <div className="demo-buttons-grid">
+            <button
+              type="button"
+              className="demo-btn"
+              onClick={() => handleQuickLogin('superadmin', 'superadmin')}
+              title="Klik untuk mengisi data Superadmin"
+            >
+              <span className="demo-role">Superadmin</span>
+              <span className="demo-divider">/</span>
+              <code className="demo-creds">superadmin</code>
+            </button>
+            <button
+              type="button"
+              className="demo-btn"
+              onClick={() => handleQuickLogin('student', 'student')}
+              title="Klik untuk mengisi data Siswa"
+            >
+              <span className="demo-role">Siswa (Student)</span>
+              <span className="demo-divider">/</span>
+              <code className="demo-creds">student</code>
+            </button>
+            <button
+              type="button"
+              className="demo-btn"
+              onClick={() => handleQuickLogin('school', 'school')}
+              title="Klik untuk mengisi data Sekolah"
+            >
+              <span className="demo-role">Sekolah (School)</span>
+              <span className="demo-divider">/</span>
+              <code className="demo-creds">school</code>
+            </button>
+            <button
+              type="button"
+              className="demo-btn"
+              onClick={() => handleQuickLogin('employer', 'employer')}
+              title="Klik untuk mengisi data Mitra"
+            >
+              <span className="demo-role">Mitra (Employer)</span>
+              <span className="demo-divider">/</span>
+              <code className="demo-creds">employer</code>
+            </button>
           </div>
         </div>
 

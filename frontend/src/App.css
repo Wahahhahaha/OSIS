@@ -508,20 +508,59 @@ select option, .form-input option {
   color: var(--text-dark);
 }
 
-.demo-account-row {
+.demo-buttons-grid {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
 }
 
-.demo-account-row code {
+.demo-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-soft-white);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-size: 12px;
+  color: var(--text-dark);
+  transition: var(--transition);
+  text-align: left;
+  outline: none;
+}
+
+.demo-btn:hover {
+  background: var(--card-bg);
+  border-color: var(--secondary-blue);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+  transform: translateY(-1px);
+}
+
+.demo-btn:active {
+  transform: translateY(0);
+}
+
+.demo-role {
+  font-weight: 500;
+}
+
+.demo-divider {
+  margin: 0 8px;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.demo-creds {
   font-family: var(--font-family);
   font-weight: 600;
   color: var(--secondary-blue);
-  background: var(--input-bg);
+  background: rgba(37, 99, 235, 0.08);
   padding: 2px 6px;
   border-radius: 4px;
-  border: 1px solid var(--card-border);
 }
 
 .admin-layout {
@@ -901,6 +940,127 @@ select option, .form-input option {
 }
 .animate-scalein {
   animation: scaleIn 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Timeline container */
+.proker-timeline {
+  position: relative;
+  margin: 24px 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Vertical line */
+.proker-timeline::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 20px;
+  width: 2px;
+  background: var(--card-border);
+}
+
+/* Timeline item wrapper */
+.proker-timeline-item {
+  position: relative;
+  margin-bottom: 24px;
+  padding-left: 50px;
+}
+
+/* Timeline marker (dot) */
+.proker-timeline-dot {
+  position: absolute;
+  top: 16px;
+  left: 11px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 4px solid var(--card-bg);
+  background: var(--text-muted);
+  box-shadow: 0 0 0 1px var(--card-border);
+  z-index: 1;
+  transition: var(--transition);
+}
+
+.proker-timeline-dot.status-rencana {
+  background: var(--text-muted);
+}
+
+.proker-timeline-dot.status-berjalan {
+  background: var(--warning);
+  box-shadow: 0 0 0 1px var(--warning);
+  animation: pulse-warning 2s infinite;
+}
+
+.proker-timeline-dot.status-selesai {
+  background: var(--success);
+  box-shadow: 0 0 0 1px var(--success);
+}
+
+/* Timeline card content */
+.proker-timeline-content {
+  position: relative;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--card-shadow);
+  transition: var(--transition);
+  text-align: left;
+}
+
+.proker-timeline-content:hover {
+  border-color: var(--secondary-blue);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.08);
+  transform: translateX(4px);
+}
+
+@keyframes pulse-warning {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+
+/* File input custom styling for matching theme */
+.form-input[type="file"] {
+  padding: 6px 12px !important;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.form-input[type="file"]::-webkit-file-upload-button,
+.form-input[type="file"]::file-selector-button {
+  background: var(--bg-soft-white);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  color: var(--text-dark);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: var(--font-family);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  margin-right: 12px;
+}
+
+.form-input[type="file"]::-webkit-file-upload-button:hover,
+.form-input[type="file"]::file-selector-button:hover {
+  background: var(--card-border);
+  border-color: var(--secondary-blue);
+}
+
+/* Textarea auto-growing and sizing constraints */
+textarea.form-input {
+  resize: vertical;
+  overflow-y: hidden;
+  box-sizing: border-box;
 }
 
 
