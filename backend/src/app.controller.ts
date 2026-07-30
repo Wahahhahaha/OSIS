@@ -295,10 +295,165 @@ export class AppController {
     return this.prisma.user.delete({ where: { id } });
   }
 
+  async autoCheckElectedPairs() {
+    console.log('[AutoCheck] Running check...');
+    const now = new Date();
+    
+    // Find all periods
+    const periods = await this.prisma.period.findMany();
+
+    for (const period of periods) {
+      if (!period.voteEndDate) {
+        console.log(`[AutoCheck] Period ${period.yearLabel} has no voteEndDate, skipping`);
+        continue;
+      }
+      const endDate = new Date(period.voteEndDate);
+      
+      // If current time is past the voting end date
+      if (now > endDate) {
+        // Resolve roles
+        let presidentRole = await this.prisma.role.findFirst({
+          where: {
+            OR: [
+              { rolename: { equals: 'president', mode: 'insensitive' } },
+              { rolename: { contains: 'president', mode: 'insensitive' } },
+              { rolename: { contains: 'ketua', mode: 'insensitive' } }
+            ]
+          }
+        });
+        let vicePresidentRole = await this.prisma.role.findFirst({
+          where: {
+            OR: [
+              { rolename: { equals: 'vice president', mode: 'insensitive' } },
+              { rolename: { contains: 'vice', mode: 'insensitive' } },
+              { rolename: { contains: 'wakil', mode: 'insensitive' } }
+            ]
+          }
+        });
+
+        if (!presidentRole) {
+          presidentRole = await this.prisma.role.create({
+            data: { rolename: 'president' }
+          });
+        }
+        if (!vicePresidentRole) {
+          vicePresidentRole = await this.prisma.role.create({
+            data: { rolename: 'vice president' }
+          });
+        }
+
+        // Check if there is already an organization member mapped for president and vice president in this period
+        const mappedPresident = await this.prisma.organizationMember.findFirst({
+          where: {
+            periodid: period.id,
+            roleid: presidentRole.id
+          }
+        });
+        const mappedVicePresident = await this.prisma.organizationMember.findFirst({
+          where: {
+            periodid: period.id,
+            roleid: vicePresidentRole.id
+          }
+        });
+
+        // If they are not mapped yet (or one is missing), we need to perform mapping!
+        if (!mappedPresident || !mappedVicePresident) {
+          console.log(`[AutoCheck] Period ${period.yearLabel} has ended voting, but President or Vice President is not mapped in OrganizationMember yet. Resolving winner...`);
+          
+          let winnerCandidateId = period.electedCandidateId;
+
+          // If winner is not set in period, calculate it from votes
+          if (!winnerCandidateId) {
+            const candidates = await this.prisma.candidate.findMany({
+              where: { periodId: period.id }
+            });
+
+            if (candidates.length > 0) {
+              const candidateVotes = await Promise.all(
+                candidates.map(async (c) => {
+                  const count = await this.prisma.vote.count({
+                    where: { candidateId: c.id }
+                  });
+                  return { candidate: c, count };
+                })
+              );
+
+              candidateVotes.sort((a, b) => b.count - a.count);
+              winnerCandidateId = candidateVotes[0].candidate.id;
+
+              // Update period elected candidate
+              await this.prisma.period.update({
+                where: { id: period.id },
+                data: { electedCandidateId: winnerCandidateId }
+              });
+              console.log(`[AutoCheck] Calculated winner for period ${period.yearLabel}: ${winnerCandidateId}`);
+            }
+          }
+
+          if (winnerCandidateId) {
+            // Find the winning candidate
+            const winnerCandidate = await this.prisma.candidate.findUnique({
+              where: { id: winnerCandidateId }
+            });
+
+            if (winnerCandidate) {
+              // Ensure President is mapped
+              if (winnerCandidate.presidentId && winnerCandidate.presidentId !== '-') {
+                const student = await this.prisma.student.findFirst({
+                  where: { userid: winnerCandidate.presidentId }
+                });
+                if (student) {
+                  // Delete existing mappings to avoid duplicates
+                  await this.prisma.organizationMember.deleteMany({
+                    where: { studentid: student.id, periodid: period.id }
+                  });
+                  await this.prisma.organizationMember.create({
+                    data: {
+                      studentid: student.id,
+                      periodid: period.id,
+                      roleid: presidentRole.id
+                    }
+                  });
+                  console.log(`[AutoCheck] Mapped President student ID ${student.id} for period ${period.yearLabel}`);
+                }
+              }
+
+              // Ensure Vice President is mapped
+              if (winnerCandidate.vicePresidentId && winnerCandidate.vicePresidentId !== '-') {
+                const student = await this.prisma.student.findFirst({
+                  where: { userid: winnerCandidate.vicePresidentId }
+                });
+                if (student) {
+                  // Delete existing mappings to avoid duplicates
+                  await this.prisma.organizationMember.deleteMany({
+                    where: { studentid: student.id, periodid: period.id }
+                  });
+                  await this.prisma.organizationMember.create({
+                    data: {
+                      studentid: student.id,
+                      periodid: period.id,
+                      roleid: vicePresidentRole.id
+                    }
+                  });
+                  console.log(`[AutoCheck] Mapped Vice President student ID ${student.id} for period ${period.yearLabel}`);
+                }
+              }
+            }
+          }
+        } else {
+          console.log(`[AutoCheck] Period ${period.yearLabel} already has both President and Vice President mapped in OrganizationMember`);
+        }
+      } else {
+        console.log(`[AutoCheck] Period ${period.yearLabel} voting has not ended yet`);
+      }
+    }
+  }
+
   // Manage Period (Database-backed)
   @Get('admin/periods')
   @UseGuards(JwtAuthGuard)
   async getPeriods() {
+    await this.autoCheckElectedPairs();
     const dbPeriods = await this.prisma.period.findMany({
       orderBy: { yearLabel: 'asc' }
     });
@@ -389,13 +544,56 @@ export class AppController {
         data: { status: 'INACTIVE' }
       });
     }
+
+    const currentPeriod = await this.prisma.period.findUnique({
+      where: { id }
+    });
+
+    let electedCandidateId = currentPeriod?.electedCandidateId || null;
+
+    // Reset winner if voteEndDate has changed
+    if (currentPeriod && body.voteEndDate !== undefined && body.voteEndDate !== currentPeriod.voteEndDate) {
+      electedCandidateId = null;
+
+      // Find roles
+      const presidentRole = await this.prisma.role.findFirst({
+        where: {
+          OR: [
+            { rolename: { equals: 'president', mode: 'insensitive' } },
+            { rolename: { contains: 'president', mode: 'insensitive' } },
+            { rolename: { contains: 'ketua', mode: 'insensitive' } }
+          ]
+        }
+      });
+      const vicePresidentRole = await this.prisma.role.findFirst({
+        where: {
+          OR: [
+            { rolename: { equals: 'vice president', mode: 'insensitive' } },
+            { rolename: { contains: 'vice', mode: 'insensitive' } },
+            { rolename: { contains: 'wakil', mode: 'insensitive' } }
+          ]
+        }
+      });
+
+      const roleIdsToDelete = [presidentRole?.id, vicePresidentRole?.id].filter(Boolean) as string[];
+      if (roleIdsToDelete.length > 0) {
+        await this.prisma.organizationMember.deleteMany({
+          where: {
+            periodid: id,
+            roleid: { in: roleIdsToDelete }
+          }
+        });
+      }
+    }
+
     return this.prisma.period.update({
       where: { id },
       data: {
         yearLabel: body.yearLabel,
         status: body.status,
         voteStartDate: body.voteStartDate || null,
-        voteEndDate: body.voteEndDate || null
+        voteEndDate: body.voteEndDate || null,
+        electedCandidateId
       }
     });
   }
@@ -493,7 +691,8 @@ export class AppController {
       include: {
         student: {
           include: {
-            class: true
+            class: true,
+            user: true
           }
         },
         role: true,

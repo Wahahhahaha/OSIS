@@ -209,6 +209,8 @@ const Dashboard = () => {
   const [selectedOrgRoleId, setSelectedOrgRoleId] = useState('');
   const [selectedOrgPeriodId, setSelectedOrgPeriodId] = useState('');
   const [selectedOrgSectionId, setSelectedOrgSectionId] = useState('');
+  const [orgViewMode, setOrgViewMode] = useState<'chart' | 'table'>('chart');
+  const [selectedChartPeriodId, setSelectedChartPeriodId] = useState('');
   const [periods, setPeriods] = useState<any[]>(() => {
     const saved = localStorage.getItem('osis_periods');
     if (saved) return JSON.parse(saved);
@@ -322,6 +324,22 @@ const Dashboard = () => {
     const electedId = electedPairs[selectedProkerPeriod.id] || (selectedProkerWinnerCandidate ? selectedProkerWinnerCandidate.id : undefined);
     return candidates.find(c => c.id === electedId) || selectedProkerWinnerCandidate || null;
   }, [selectedProkerPeriod, candidates, electedPairs, selectedProkerWinnerCandidate]);
+
+  const prokerPresident = useMemo(() => {
+    if (!selectedProkerPeriod) return null;
+    return orgMembers.find(m => 
+      m.periodid === selectedProkerPeriod.id && 
+      (m.role?.rolename.toLowerCase() === 'president' || m.role?.rolename.toLowerCase() === 'ketua osis')
+    );
+  }, [selectedProkerPeriod, orgMembers]);
+
+  const prokerVicePresident = useMemo(() => {
+    if (!selectedProkerPeriod) return null;
+    return orgMembers.find(m => 
+      m.periodid === selectedProkerPeriod.id && 
+      (m.role?.rolename.toLowerCase() === 'vice president' || m.role?.rolename.toLowerCase() === 'wakil ketua osis')
+    );
+  }, [selectedProkerPeriod, orgMembers]);
 
   // Add Period Form State
   const [newPeriodYear, setNewPeriodYear] = useState('');
@@ -596,11 +614,24 @@ const Dashboard = () => {
       const data = await authApi.getPeriods();
       setPeriods(data);
       localStorage.setItem('osis_periods', JSON.stringify(data));
+      const active = data.find(p => p.status === 'ACTIVE');
+      if (active) {
+        setSelectedChartPeriodId(active.id);
+      } else if (data.length > 0) {
+        setSelectedChartPeriodId(data[0].id);
+      }
     } catch (e) {
       console.error(e);
       const savedPeriods = localStorage.getItem('osis_periods');
       if (savedPeriods) {
-        setPeriods(JSON.parse(savedPeriods));
+        const parsed = JSON.parse(savedPeriods);
+        setPeriods(parsed);
+        const active = parsed.find((p: any) => p.status === 'ACTIVE');
+        if (active) {
+          setSelectedChartPeriodId(active.id);
+        } else if (parsed.length > 0) {
+          setSelectedChartPeriodId(parsed[0].id);
+        }
       }
     }
   };
@@ -863,6 +894,20 @@ const Dashboard = () => {
       console.error(e);
       alert('Gagal menghapus sekbid');
     }
+  };
+
+  const openAddOrgMemberForRole = (roleNameQuery: string, sectionId: string = '') => {
+    const matchedRole = roles.find(r => 
+      r.rolename.toLowerCase() === roleNameQuery.toLowerCase() ||
+      r.rolename.toLowerCase().includes(roleNameQuery.toLowerCase())
+    ) || roles.find(r => r.rolename.toLowerCase() === 'members') || roles[0];
+    
+    setSelectedOrgStudentId('');
+    setSelectedOrgRoleId(matchedRole ? matchedRole.id : '');
+    setSelectedOrgPeriodId(selectedChartPeriodId);
+    setSelectedOrgSectionId(sectionId);
+    setEditingItem(null);
+    setActiveModal('add-org-member');
   };
 
   // Actions for Organization Members
@@ -2056,6 +2101,26 @@ const Dashboard = () => {
       }
 
       case 'proker': {
+        const periodMembers = selectedProkerPeriod ? orgMembers.filter(m => m.periodid === selectedProkerPeriod.id) : [];
+        const prokerPresident = periodMembers.find(m => 
+          m.role?.rolename.toLowerCase() === 'president' || m.role?.rolename.toLowerCase() === 'ketua osis'
+        );
+        const prokerVicePresident = periodMembers.find(m => 
+          m.role?.rolename.toLowerCase() === 'vice president' || m.role?.rolename.toLowerCase() === 'wakil ketua osis'
+        );
+
+        const presidentName = prokerPresident?.student?.user?.username 
+          || (selectedProkerCandidate ? (selectedProkerCandidate.presidentName || selectedProkerCandidate.name.split(' & ')[0]) : null);
+        const presidentClass = prokerPresident?.student?.class?.classname 
+          || (selectedProkerCandidate ? (selectedProkerCandidate.presidentClass || selectedProkerCandidate.classes.split(' & ')[0]) : null);
+
+        const vicePresidentName = prokerVicePresident?.student?.user?.username 
+          || (selectedProkerCandidate ? (selectedProkerCandidate.vicePresidentName || selectedProkerCandidate.name.split(' & ')[1]) : null);
+        const vicePresidentClass = prokerVicePresident?.student?.class?.classname 
+          || (selectedProkerCandidate ? (selectedProkerCandidate.vicePresidentClass || selectedProkerCandidate.classes.split(' & ')[1]) : null);
+
+        const hasOfficers = presidentName || vicePresidentName;
+
         const periodProkers = selectedProkerPeriod ? prokers.filter(p => {
           const matchesPeriod = p.periodId === selectedProkerPeriod.id;
           const matchesCandidate = selectedProkerCandidate ? (p.candidateId === selectedProkerCandidate.id || !p.candidateId) : true;
@@ -2114,8 +2179,7 @@ const Dashboard = () => {
               </div>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-
-                {selectedProkerCandidate && (
+                {hasOfficers && (
                   <button 
                     onClick={() => {
                       setProkerName('');
@@ -2140,43 +2204,49 @@ const Dashboard = () => {
               </p>
 
               {/* Elected Officer Banner */}
-              {selectedProkerCandidate ? (
+              {hasOfficers ? (
                 <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', background: 'linear-gradient(135deg, rgba(37,99,235,0.04) 0%, rgba(37,99,235,0) 100%)', display: 'flex', flexDirection: 'column', gap: '16px', borderRadius: '12px', textAlign: 'left' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--secondary-blue)', display: 'block' }}>
                       Pengurus OSIS Terpilih (Periode {selectedProkerPeriod ? selectedProkerPeriod.yearLabel : '-'})
                     </span>
                     <span style={{ fontSize: '11px', padding: '4px 10px', background: 'var(--success)', color: '#fff', borderRadius: '12px', fontWeight: 700 }}>
-                      Hasil Voting Terbanyak
+                      Aktif Menjabat
                     </span>
                   </div>
                   
                   <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <div style={{ display: 'flex', gap: '32px', flexWrap: 'wrap', alignItems: 'center' }}>
                       {/* President Role */}
-                      <div>
-                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>President (Ketua OSIS)</div>
-                        <h4 style={{ margin: '4px 0 2px', fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700 }}>
-                          {selectedProkerCandidate.presidentName || selectedProkerCandidate.name.split(' & ')[0]}
-                        </h4>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          Kelas: {selectedProkerCandidate.presidentClass || selectedProkerCandidate.classes.split(' & ')[0] || '-'}
-                        </span>
-                      </div>
+                      {presidentName && (
+                        <div>
+                          <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>President (Ketua OSIS)</div>
+                          <h4 style={{ margin: '4px 0 2px', fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700 }}>
+                            {presidentName}
+                          </h4>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            Kelas: {presidentClass || '-'}
+                          </span>
+                        </div>
+                      )}
                       
                       {/* Divider */}
-                      <div style={{ borderLeft: '1px solid var(--card-border)', height: '40px' }}></div>
+                      {presidentName && vicePresidentName && (
+                        <div style={{ borderLeft: '1px solid var(--card-border)', height: '40px' }}></div>
+                      )}
                       
                       {/* Vice President Role */}
-                      <div>
-                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Vice President (Wakil Ketua)</div>
-                        <h4 style={{ margin: '4px 0 2px', fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700 }}>
-                          {selectedProkerCandidate.vicePresidentName || selectedProkerCandidate.name.split(' & ')[1]}
-                        </h4>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          Kelas: {selectedProkerCandidate.vicePresidentClass || selectedProkerCandidate.classes.split(' & ')[1] || '-'}
-                        </span>
-                      </div>
+                      {vicePresidentName && (
+                        <div>
+                          <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Vice President (Wakil Ketua)</div>
+                          <h4 style={{ margin: '4px 0 2px', fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700 }}>
+                            {vicePresidentName}
+                          </h4>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            Kelas: {vicePresidentClass || '-'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2189,15 +2259,10 @@ const Dashboard = () => {
                       `Belum ada pengurus OSIS terpilih yang ditetapkan menjabat untuk periode yang dipilih (${selectedProkerPeriod ? selectedProkerPeriod.yearLabel : '-'}).`
                     )}
                   </p>
-                  {userData.role === 'superadmin' && !(selectedProkerPeriod?.voteEndDate && new Date() < new Date(selectedProkerPeriod.voteEndDate)) && (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: '4px 0 0' }}>
-                      Silakan pilih Pasangan Terpilih pada dropdown di atas untuk mulai menyusun program kerja.
-                    </p>
-                  )}
                 </div>
               )}
 
-              {selectedProkerCandidate && (
+              {hasOfficers && (
                 <>
                   {/* Proker Statistics */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
@@ -2883,95 +2948,445 @@ const Dashboard = () => {
             sectionName.toLowerCase().includes(adminSearch.toLowerCase());
         });
 
+        // Filter members specifically for the selected period in the chart
+        const periodMembers = orgMembers.filter(m => m.periodid === selectedChartPeriodId);
+        
+        // President (Ketua OSIS)
+        const president = periodMembers.find(m => 
+          m.role?.rolename.toLowerCase() === 'president' || 
+          m.role?.rolename.toLowerCase() === 'ketua osis'
+        );
+        
+        // Vice President (Wakil Ketua OSIS)
+        const vicePresident = periodMembers.find(m => 
+          m.role?.rolename.toLowerCase() === 'vice president' || 
+          m.role?.rolename.toLowerCase() === 'wakil ketua osis'
+        );
+
+        // Secretaries (Sekretaris)
+        const secretaries = periodMembers.filter(m => 
+          m.role?.rolename.toLowerCase().includes('secretaris') || 
+          m.role?.rolename.toLowerCase().includes('sekretaris')
+        );
+
+        // Treasurers (Bendahara)
+        const treasurers = periodMembers.filter(m => 
+          m.role?.rolename.toLowerCase().includes('treasurer') || 
+          m.role?.rolename.toLowerCase().includes('bendahara')
+        );
+
+        // Seksi Bidang (Sekbid)
+        const sekbidGroups = sections.map(sec => {
+          const secMembers = periodMembers.filter(m => m.sectionid === sec.id && 
+            m.role?.rolename.toLowerCase() !== 'president' && 
+            m.role?.rolename.toLowerCase() !== 'ketua osis' &&
+            m.role?.rolename.toLowerCase() !== 'vice president' &&
+            m.role?.rolename.toLowerCase() !== 'wakil ketua osis' &&
+            !m.role?.rolename.toLowerCase().includes('secretaris') &&
+            !m.role?.rolename.toLowerCase().includes('sekretaris') &&
+            !m.role?.rolename.toLowerCase().includes('treasurer') &&
+            !m.role?.rolename.toLowerCase().includes('bendahara')
+          );
+          return {
+            section: sec,
+            members: secMembers
+          };
+        });
+
+        // School users for Pelindung & Pembina
+        const principal = users.find(u => u.level === 'school' && (u.role?.toLowerCase() === 'principal' || u.role?.toLowerCase() === 'kepala sekolah'));
+        const studentAffair = users.find(u => u.level === 'school' && (u.role?.toLowerCase() === 'student affair' || u.role?.toLowerCase() === 'wakasek kesiswaan' || u.role?.toLowerCase() === 'pembina osis'));
+
+        const principalName = principal?.username || 'Kepala Sekolah';
+        const studentAffairName = studentAffair?.username || 'Pembina OSIS';
+
+        const renderNodeCard = (name: string, roleName: string, subText: string, onEdit?: () => void, onDelete?: () => void) => {
+          const initials = name ? name.substring(0, 2).toUpperCase() : 'OS';
+          return (
+            <div className="org-chart-node animate-slideup" key={name + roleName}>
+              <div className="org-chart-node-avatar">{initials}</div>
+              <div className="org-chart-node-role">{roleName}</div>
+              <h4 className="org-chart-node-name">{name}</h4>
+              {subText && <p className="org-chart-node-class">{subText}</p>}
+              {userData.role === 'superadmin' && (onEdit || onDelete) && (
+                <div className="org-chart-node-actions">
+                  {onEdit && (
+                    <button onClick={onEdit} className="action-btn" style={{ padding: '4px 8px', fontSize: '11px', marginRight: '4px' }}>
+                      <Edit2 size={11} /> Edit
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button onClick={onDelete} className="action-btn action-btn-danger" style={{ padding: '4px 8px', fontSize: '11px' }}>
+                      <Trash2 size={11} /> Hapus
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        };
+
         return (
-          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', minHeight: '600px', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Users size={20} color="var(--secondary-blue)" />
-                Kelola Anggota Organisasi OSIS
+                Bagan & Data Organisasi OSIS
               </h2>
-              {userData.role === 'superadmin' && (
-                <button onClick={() => {
-                  setSelectedOrgStudentId('');
-                  setSelectedOrgRoleId('');
-                  setSelectedOrgPeriodId('');
-                  setSelectedOrgSectionId('');
-                  setEditingItem(null);
-                  setActiveModal('add-org-member');
-                }} className="btn-primary-sm">
-                  <Plus size={16} /> Tambah Anggota
-                </button>
-              )}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                {userData.role === 'superadmin' && (
+                  <button onClick={() => {
+                    setSelectedOrgStudentId('');
+                    setSelectedOrgRoleId('');
+                    setSelectedOrgPeriodId('');
+                    setSelectedOrgSectionId('');
+                    setEditingItem(null);
+                    setActiveModal('add-org-member');
+                  }} className="btn-primary-sm">
+                    <Plus size={16} /> Tambah Anggota
+                  </button>
+                )}
+              </div>
             </div>
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              Petakan jabatan OSIS (selain Ketua dan Wakil Ketua) untuk murid-murid di setiap periode kepengurusan.
-            </p>
+            
+            {/* Top Toolbar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Periode:</span>
+                  <select 
+                    className="form-input" 
+                    style={{ width: '150px', margin: 0, paddingLeft: '12px' }}
+                    value={selectedChartPeriodId}
+                    onChange={e => setSelectedChartPeriodId(e.target.value)}
+                  >
+                    {periods.map(p => (
+                      <option key={p.id} value={p.id}>{p.yearLabel}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
-              <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
-                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  placeholder="Cari murid, kelas, jabatan, sekbid..." 
-                  style={{ paddingLeft: '40px', margin: 0 }}
-                  value={adminSearch}
-                  onChange={e => setAdminSearch(e.target.value)}
-                />
+              {/* View Toggle */}
+              <div style={{ display: 'flex', background: 'var(--bg-soft-white)', border: '1px solid var(--card-border)', borderRadius: '10px', padding: '3px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setOrgViewMode('chart')}
+                  style={{
+                    border: 'none',
+                    background: orgViewMode === 'chart' ? 'var(--secondary-blue)' : 'transparent',
+                    color: orgViewMode === 'chart' ? '#fff' : 'var(--text-muted)',
+                    padding: '6px 16px',
+                    borderRadius: '7px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    transition: 'var(--transition)'
+                  }}
+                >
+                  Struktur Bagan
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setOrgViewMode('table')}
+                  style={{
+                    border: 'none',
+                    background: orgViewMode === 'table' ? 'var(--secondary-blue)' : 'transparent',
+                    color: orgViewMode === 'table' ? '#fff' : 'var(--text-muted)',
+                    padding: '6px 16px',
+                    borderRadius: '7px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    transition: 'var(--transition)'
+                  }}
+                >
+                  Tabel Data
+                </button>
               </div>
             </div>
 
-            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Nama Murid</th>
-                    <th>Kelas</th>
-                    <th>Jabatan OSIS</th>
-                    <th>Sekbid</th>
-                    <th>Periode</th>
-                    {userData.role === 'superadmin' && <th>Aksi</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrgMembers.map(m => (
-                    <tr key={m.id}>
-                      <td style={{ fontWeight: 600 }}>{m.student?.user?.username || '-'}</td>
-                      <td>{m.student?.class?.classname || '-'}</td>
-                      <td style={{ textTransform: 'capitalize' }}>
-                        <span className="badge badge-student">{m.role?.rolename || '-'}</span>
-                      </td>
-                      <td>{m.section?.sectionname || '-'}</td>
-                      <td>
-                        <span className="badge badge-employer">{m.period?.yearLabel || '-'}</span>
-                      </td>
-                      {userData.role === 'superadmin' && (
-                        <td>
-                          <button onClick={() => {
-                            setEditingItem(m);
-                            setSelectedOrgStudentId(m.studentid);
-                            setSelectedOrgRoleId(m.roleid);
-                            setSelectedOrgPeriodId(m.periodid);
-                            setSelectedOrgSectionId(m.sectionid || '');
-                            setActiveModal('edit-org-member');
-                          }} className="action-btn" style={{ marginRight: '8px' }}>
-                            <Edit2 size={13} /> Edit
-                          </button>
-                          <button onClick={() => handleDeleteOrgMember(m.id)} className="action-btn action-btn-danger">
-                            <Trash2 size={13} /> Hapus
-                          </button>
-                        </td>
+            {orgViewMode === 'chart' ? (
+              /* Graphical Chart View */
+              <div style={{ overflowX: 'auto', width: '100%' }}>
+                <div className="org-chart-container">
+                  {/* Tier 1: Pembina & Pelindung */}
+                  <div className="org-chart-tier org-chart-tier-top">
+                    {renderNodeCard(principalName, 'Kepala Sekolah', 'Pelindung')}
+                    {renderNodeCard(studentAffairName, 'Wakasek Kesiswaan', 'Pembina OSIS')}
+                  </div>
+
+                  {/* Tier 2: President & Vice President */}
+                  <div className="org-chart-tier">
+                    {president ? (
+                      renderNodeCard(
+                        president.student?.user?.username || '-',
+                        president.role?.rolename || 'Ketua OSIS',
+                        president.student?.class?.classname || '-',
+                        () => {
+                          setEditingItem(president);
+                          setSelectedOrgStudentId(president.studentid);
+                          setSelectedOrgRoleId(president.roleid);
+                          setSelectedOrgPeriodId(president.periodid);
+                          setSelectedOrgSectionId(president.sectionid || '');
+                          setActiveModal('edit-org-member');
+                        },
+                        () => handleDeleteOrgMember(president.id)
+                      )
+                    ) : (
+                      <div 
+                        className="org-chart-node org-chart-section-card animate-slideup" 
+                        style={{ opacity: 0.7, cursor: userData.role === 'superadmin' ? 'pointer' : 'default' }}
+                        onClick={() => userData.role === 'superadmin' && openAddOrgMemberForRole('president')}
+                      >
+                        <div className="org-chart-node-avatar">?</div>
+                        <div className="org-chart-node-role">Ketua OSIS</div>
+                        <h4 className="org-chart-node-name" style={{ color: 'var(--text-muted)' }}>Belum Terpilih</h4>
+                        {userData.role === 'superadmin' && (
+                          <span style={{ fontSize: '11px', color: 'var(--secondary-blue)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                            <Plus size={12} /> Set Ketua OSIS
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {vicePresident ? (
+                      renderNodeCard(
+                        vicePresident.student?.user?.username || '-',
+                        vicePresident.role?.rolename || 'Wakil Ketua OSIS',
+                        vicePresident.student?.class?.classname || '-',
+                        () => {
+                          setEditingItem(vicePresident);
+                          setSelectedOrgStudentId(vicePresident.studentid);
+                          setSelectedOrgRoleId(vicePresident.roleid);
+                          setSelectedOrgPeriodId(vicePresident.periodid);
+                          setSelectedOrgSectionId(vicePresident.sectionid || '');
+                          setActiveModal('edit-org-member');
+                        },
+                        () => handleDeleteOrgMember(vicePresident.id)
+                      )
+                    ) : (
+                      <div 
+                        className="org-chart-node org-chart-section-card animate-slideup" 
+                        style={{ opacity: 0.7, cursor: userData.role === 'superadmin' ? 'pointer' : 'default' }}
+                        onClick={() => userData.role === 'superadmin' && openAddOrgMemberForRole('vice president')}
+                      >
+                        <div className="org-chart-node-avatar">?</div>
+                        <div className="org-chart-node-role">Wakil Ketua OSIS</div>
+                        <h4 className="org-chart-node-name" style={{ color: 'var(--text-muted)' }}>Belum Terpilih</h4>
+                        {userData.role === 'superadmin' && (
+                          <span style={{ fontSize: '11px', color: 'var(--secondary-blue)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                            <Plus size={12} /> Set Wakil Ketua
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tier 3: Sekretaris & Bendahara */}
+                  <div className="org-chart-tier">
+                    {/* Sekretaris Panel */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Sekretaris</span>
+                      <div style={{ display: 'flex', gap: '16px' }}>
+                        {secretaries.length > 0 ? (
+                          secretaries.map(sec => 
+                            renderNodeCard(
+                              sec.student?.user?.username || '-',
+                              sec.role?.rolename || 'Sekretaris',
+                              sec.student?.class?.classname || '-',
+                              () => {
+                                setEditingItem(sec);
+                                setSelectedOrgStudentId(sec.studentid);
+                                setSelectedOrgRoleId(sec.roleid);
+                                setSelectedOrgPeriodId(sec.periodid);
+                                setSelectedOrgSectionId(sec.sectionid || '');
+                                setActiveModal('edit-org-member');
+                              },
+                              () => handleDeleteOrgMember(sec.id)
+                            )
+                          )
+                        ) : (
+                          <div 
+                            className="org-chart-node org-chart-section-card animate-slideup" 
+                            style={{ opacity: 0.7, minWidth: '150px', cursor: userData.role === 'superadmin' ? 'pointer' : 'default' }}
+                            onClick={() => userData.role === 'superadmin' && openAddOrgMemberForRole('sekretaris')}
+                          >
+                            <div className="org-chart-node-avatar">?</div>
+                            <div className="org-chart-node-role">Sekretaris</div>
+                            <h4 className="org-chart-node-name" style={{ color: 'var(--text-muted)' }}>Belum Diisi</h4>
+                            {userData.role === 'superadmin' && (
+                              <span style={{ fontSize: '11px', color: 'var(--secondary-blue)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                                <Plus size={12} /> Tambah
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bendahara Panel */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Bendahara</span>
+                      <div style={{ display: 'flex', gap: '16px' }}>
+                        {treasurers.length > 0 ? (
+                          treasurers.map(tr => 
+                            renderNodeCard(
+                              tr.student?.user?.username || '-',
+                              tr.role?.rolename || 'Bendahara',
+                              tr.student?.class?.classname || '-',
+                              () => {
+                                setEditingItem(tr);
+                                setSelectedOrgStudentId(tr.studentid);
+                                setSelectedOrgRoleId(tr.roleid);
+                                setSelectedOrgPeriodId(tr.periodid);
+                                setSelectedOrgSectionId(tr.sectionid || '');
+                                setActiveModal('edit-org-member');
+                              },
+                              () => handleDeleteOrgMember(tr.id)
+                            )
+                          )
+                        ) : (
+                          <div 
+                            className="org-chart-node org-chart-section-card animate-slideup" 
+                            style={{ opacity: 0.7, minWidth: '150px', cursor: userData.role === 'superadmin' ? 'pointer' : 'default' }}
+                            onClick={() => userData.role === 'superadmin' && openAddOrgMemberForRole('bendahara')}
+                          >
+                            <div className="org-chart-node-avatar">?</div>
+                            <div className="org-chart-node-role">Bendahara</div>
+                            <h4 className="org-chart-node-name" style={{ color: 'var(--text-muted)' }}>Belum Diisi</h4>
+                            {userData.role === 'superadmin' && (
+                              <span style={{ fontSize: '11px', color: 'var(--secondary-blue)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                                <Plus size={12} /> Tambah
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tier 4: Seksi Bidang (Sekbid) */}
+                  <div style={{ width: '100%', marginTop: '20px' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1.2px' }}>Seksi Bidang (Sekbid)</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '24px', width: '100%' }}>
+                      {sekbidGroups.map(grp => (
+                        <div key={grp.section.id} style={{ background: 'var(--bg-light-gray)', border: '1px solid var(--card-border)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--card-border)', width: '100%', paddingBottom: '8px', marginBottom: '8px' }}>
+                            <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--secondary-blue)', textTransform: 'uppercase' }}>
+                              {grp.section.sectionname}
+                            </span>
+                            {userData.role === 'superadmin' && (
+                              <button 
+                                onClick={() => openAddOrgMemberForRole('members', grp.section.id)}
+                                className="action-btn"
+                                style={{ padding: '2px 6px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '2px' }}
+                                title={`Tambah Anggota ke ${grp.section.sectionname}`}
+                              >
+                                <Plus size={12} /> Tambah
+                              </button>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', alignItems: 'center' }}>
+                            {grp.members.length > 0 ? (
+                              grp.members.map(m => 
+                                renderNodeCard(
+                                  m.student?.user?.username || '-',
+                                  m.role?.rolename || 'Anggota',
+                                  m.student?.class?.classname || '-',
+                                  () => {
+                                    setEditingItem(m);
+                                    setSelectedOrgStudentId(m.studentid);
+                                    setSelectedOrgRoleId(m.roleid);
+                                    setSelectedOrgPeriodId(m.periodid);
+                                    setSelectedOrgSectionId(m.sectionid || '');
+                                    setActiveModal('edit-org-member');
+                                  },
+                                  () => handleDeleteOrgMember(m.id)
+                                )
+                              )
+                            ) : (
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 0' }}>Belum ada anggota</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Standard Table View */
+              <>
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
+                  <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
+                    <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Cari murid, kelas, jabatan, sekbid..." 
+                      style={{ paddingLeft: '40px', margin: 0 }}
+                      value={adminSearch}
+                      onChange={e => setAdminSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Nama Murid</th>
+                        <th>Kelas</th>
+                        <th>Jabatan OSIS</th>
+                        <th>Sekbid</th>
+                        <th>Periode</th>
+                        {userData.role === 'superadmin' && <th>Aksi</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredOrgMembers.map(m => (
+                        <tr key={m.id}>
+                          <td style={{ fontWeight: 600 }}>{m.student?.user?.username || '-'}</td>
+                          <td>{m.student?.class?.classname || '-'}</td>
+                          <td style={{ textTransform: 'capitalize' }}>
+                            <span className="badge badge-student">{m.role?.rolename || '-'}</span>
+                          </td>
+                          <td>{m.section?.sectionname || '-'}</td>
+                          <td>
+                            <span className="badge badge-employer">{m.period?.yearLabel || '-'}</span>
+                          </td>
+                          {userData.role === 'superadmin' && (
+                            <td>
+                              <button onClick={() => {
+                                setEditingItem(m);
+                                setSelectedOrgStudentId(m.studentid);
+                                setSelectedOrgRoleId(m.roleid);
+                                setSelectedOrgPeriodId(m.periodid);
+                                setSelectedOrgSectionId(m.sectionid || '');
+                                setActiveModal('edit-org-member');
+                              }} className="action-btn" style={{ marginRight: '8px' }}>
+                                <Edit2 size={13} /> Edit
+                              </button>
+                              <button onClick={() => handleDeleteOrgMember(m.id)} className="action-btn action-btn-danger">
+                                <Trash2 size={13} /> Hapus
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                      {filteredOrgMembers.length === 0 && (
+                        <tr>
+                          <td colSpan={userData.role === 'superadmin' ? 6 : 5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data anggota organisasi.</td>
+                        </tr>
                       )}
-                    </tr>
-                  ))}
-                  {filteredOrgMembers.length === 0 && (
-                    <tr>
-                      <td colSpan={userData.role === 'superadmin' ? 6 : 5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data anggota organisasi.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         );
       }
