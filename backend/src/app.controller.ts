@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, BadRequestException, Query } from '@nestjs/common';
 import { AppService } from './app.service';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -635,9 +635,18 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async deleteRole(@Param('id') id: string) {
-    return this.prisma.role.delete({
-      where: { id },
-    });
+    try {
+      return await this.prisma.role.delete({
+        where: { id },
+      });
+    } catch (error: any) {
+      if (error.code === 'P2003') {
+        throw new BadRequestException(
+          'Peran (Role) tidak dapat dihapus karena sedang digunakan oleh data lain (sekolah, mitra, atau anggota organisasi).',
+        );
+      }
+      throw error;
+    }
   }
 
   // Manage Section Endpoints
@@ -1009,6 +1018,66 @@ export class AppController {
   @Get('admin/prokers')
   @UseGuards(JwtAuthGuard)
   async getProkers() {
+    const periods = await this.prisma.period.findMany();
+    
+    const mandatoryList = [
+      {
+        name: 'MPLS (Masa Pengenalan Lingkungan Sekolah)',
+        description: 'Kegiatan pengenalan lingkungan sekolah bagi siswa baru kelas VII / X.',
+        monthName: 'Juli',
+        isGenap: false
+      },
+      {
+        name: 'Peringatan HUT RI',
+        description: 'Penyelenggaraan berbagai perlombaan dan upacara bendera dalam rangka memperingati Hari Kemerdekaan Republik Indonesia.',
+        monthName: 'Agustus',
+        isGenap: false
+      },
+      {
+        name: 'Hari Guru Nasional',
+        description: 'Peringatan Hari Guru Nasional sebagai bentuk apresiasi terhadap jasa para guru.',
+        monthName: 'November',
+        isGenap: false
+      },
+      {
+        name: 'Classmeet Akhir Tahun (Semester Ganjil)',
+        description: 'Kegiatan perlombaan antar kelas setelah ujian semester ganjil selesai.',
+        monthName: 'Desember',
+        isGenap: false
+      },
+      {
+        name: 'Classmeet Kenaikan Kelas (Semester Genap)',
+        description: 'Kegiatan perlombaan antar kelas di pertengahan Juni sebelum pembagian rapor kenaikan kelas.',
+        monthName: 'Juni',
+        isGenap: true
+      }
+    ];
+
+    for (const period of periods) {
+      const existingProkers = await this.prisma.proker.findMany({
+        where: { periodId: period.id }
+      });
+      const existingNames = existingProkers.map(p => p.name);
+
+      const startYear = period.yearLabel.split('/')[0];
+      const endYear = period.yearLabel.split('/')[1] || String(Number(startYear) + 1);
+
+      for (const item of mandatoryList) {
+        if (!existingNames.includes(item.name)) {
+          const targetYear = item.isGenap ? endYear : startYear;
+          await this.prisma.proker.create({
+            data: {
+              name: item.name,
+              description: item.description,
+              targetDate: `${item.monthName} ${targetYear}`,
+              status: 'Rencana',
+              periodId: period.id
+            }
+          });
+        }
+      }
+    }
+
     return this.prisma.proker.findMany({
       orderBy: { createdAt: 'desc' }
     });
@@ -1034,6 +1103,28 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris')
   async updateProker(@Param('id') id: string, @Body() body: any) {
+    const existing = await this.prisma.proker.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new BadRequestException('Program kerja tidak ditemukan');
+    }
+
+    const mandatoryProkers = [
+      'MPLS (Masa Pengenalan Lingkungan Sekolah)',
+      'Peringatan HUT RI',
+      'Hari Guru Nasional',
+      'Classmeet Akhir Tahun (Semester Ganjil)',
+      'Classmeet Kenaikan Kelas (Semester Genap)',
+    ];
+
+    if (mandatoryProkers.includes(existing.name) && existing.name !== body.name) {
+      throw new BadRequestException(
+        `Nama program kerja wajib '${existing.name}' tidak dapat diubah.`,
+      );
+    }
+
     return this.prisma.proker.update({
       where: { id },
       data: {
@@ -1051,6 +1142,28 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris')
   async deleteProker(@Param('id') id: string) {
+    const existing = await this.prisma.proker.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new BadRequestException('Program kerja tidak ditemukan');
+    }
+
+    const mandatoryProkers = [
+      'MPLS (Masa Pengenalan Lingkungan Sekolah)',
+      'Peringatan HUT RI',
+      'Hari Guru Nasional',
+      'Classmeet Akhir Tahun (Semester Ganjil)',
+      'Classmeet Kenaikan Kelas (Semester Genap)',
+    ];
+
+    if (mandatoryProkers.includes(existing.name)) {
+      throw new BadRequestException(
+        `Program kerja wajib '${existing.name}' tidak dapat dihapus.`,
+      );
+    }
+
     return this.prisma.proker.delete({
       where: { id }
     });
@@ -1163,4 +1276,155 @@ export class AppController {
     }
 
   }
+
+  @Get('admin/kas')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
+  async getKasData(
+    @Query('month') monthStr?: string,
+    @Query('year') yearStr?: string,
+  ) {
+    const now = new Date();
+    const month = monthStr ? parseInt(monthStr, 10) : now.getMonth() + 1;
+    const year = yearStr ? parseInt(yearStr, 10) : now.getFullYear();
+
+    if (isNaN(month) || month < 1 || month > 12) {
+      throw new BadRequestException('Bulan tidak valid (harus 1-12)');
+    }
+    if (isNaN(year)) {
+      throw new BadRequestException('Tahun tidak valid');
+    }
+
+    const activePeriod = await this.prisma.period.findFirst({
+      where: { status: 'ACTIVE' },
+    });
+
+    if (!activePeriod) {
+      return {
+        activePeriod: null,
+        classes: [],
+      };
+    }
+
+    const classes = await this.prisma.class.findMany({
+      include: {
+        grade: true,
+        major: true,
+        _count: {
+          select: { students: true },
+        },
+        kasPayments: {
+          where: {
+            periodId: activePeriod.id,
+            month,
+            year,
+          },
+        },
+      },
+      orderBy: [
+        { grade: { gradename: 'asc' } },
+        { major: { majorcode: 'asc' } },
+        { classname: 'asc' },
+      ],
+    });
+
+    const totalAccumulated = await this.prisma.kasPayment.aggregate({
+      where: {
+        periodId: activePeriod.id,
+      },
+      _sum: {
+        amount: true,
+      },
+    });
+    const accumulatedTotal = totalAccumulated._sum.amount || 0;
+
+    return {
+      activePeriod,
+      selectedMonth: month,
+      selectedYear: year,
+      accumulatedTotal,
+      classes: classes.map((cls) => ({
+        id: cls.id,
+        classname: cls.classname,
+        grade: cls.grade.gradename,
+        major: cls.major.majorname,
+        majorCode: cls.major.majorcode,
+        studentCount: cls._count.students,
+        requiredPayment: cls._count.students * 5000,
+        isPaid: cls.kasPayments.length > 0,
+        paidAt: cls.kasPayments.length > 0 ? cls.kasPayments[0].createdAt : null,
+      })),
+    };
+  }
+
+  @Post('admin/kas/pay')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin', 'treasurer', 'president', 'vice president')
+  async recordPayment(
+    @Body() body: any,
+  ) {
+    const { classId } = body;
+    const month = body.month ? parseInt(body.month, 10) : undefined;
+    const year = body.year ? parseInt(body.year, 10) : undefined;
+
+    if (!classId) {
+      throw new BadRequestException('Class ID is required');
+    }
+    if (!month || isNaN(month) || month < 1 || month > 12) {
+      throw new BadRequestException('Bulan tidak valid (harus 1-12)');
+    }
+    if (!year || isNaN(year)) {
+      throw new BadRequestException('Tahun tidak valid');
+    }
+
+    const activePeriod = await this.prisma.period.findFirst({
+      where: { status: 'ACTIVE' },
+    });
+
+    if (!activePeriod) {
+      throw new BadRequestException('Tidak ada periode aktif saat ini.');
+    }
+
+    const cls = await this.prisma.class.findUnique({
+      where: { id: classId },
+      include: {
+        _count: {
+          select: { students: true },
+        },
+      },
+    });
+
+    if (!cls) {
+      throw new BadRequestException('Kelas tidak ditemukan');
+    }
+
+    const existing = await this.prisma.kasPayment.findUnique({
+      where: {
+        classId_periodId_month_year: {
+          classId,
+          periodId: activePeriod.id,
+          month,
+          year,
+        },
+      },
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    const studentCount = cls._count.students;
+    const amount = studentCount * 5000;
+
+    return this.prisma.kasPayment.create({
+      data: {
+        classId,
+        periodId: activePeriod.id,
+        month,
+        year,
+        amount,
+      },
+    });
+  }
 }
+

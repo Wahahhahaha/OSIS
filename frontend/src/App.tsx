@@ -26,7 +26,15 @@ import {
   Grid,
   ChevronDown,
   ChevronRight,
-  Search
+  Search,
+  Coins,
+  ArrowLeft,
+  Info,
+  FileText,
+  Folder,
+  UserPlus,
+  CheckSquare,
+  Image as ImageIcon
 } from 'lucide-react';
 import { authApi } from './api';
 import type { SystemResponse } from './api';
@@ -86,6 +94,8 @@ const Dashboard = () => {
     if (path === '/backup-db') return 'backup-db';
     if (path === '/profile') return 'profile';
     if (path === '/proker' || path === '/program-kerja') return 'proker';
+    if (path === '/kas') return 'kas';
+    if (path === '/proker-detail') return 'proker-detail';
     return 'dashboard';
   };
   const activeMenu = getActiveMenuFromPath(location.pathname);
@@ -205,6 +215,23 @@ const Dashboard = () => {
   const [adminSearch, setAdminSearch] = useState('');
   const [orgMembers, setOrgMembers] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
+  const [kasData, setKasData] = useState<{ activePeriod: any; selectedMonth: number; selectedYear: number; accumulatedTotal: number; classes: any[] } | null>(null);
+  const [kasLoading, setKasLoading] = useState<boolean>(false);
+  const [kasError, setKasError] = useState<string | null>(null);
+  const [kasMonth, setKasMonth] = useState<number>(() => new Date().getMonth() + 1);
+  const [kasYear, setKasYear] = useState<number>(() => new Date().getFullYear());
+  const [selectedProkerDetail, setSelectedProkerDetail] = useState<any | null>(null);
+  const [prokerTab, setProkerTab] = useState<'overview' | 'proposal' | 'rapat' | 'divisi' | 'anggota' | 'absensi' | 'laporan' | 'dokumentasi'>('overview');
+  const [activeProkerMeetingId, setActiveProkerMeetingId] = useState<string>('');
+  const [prokerSubData, setProkerSubData] = useState<any>({
+    proposals: [],
+    meetings: [],
+    divisions: [],
+    members: [],
+    attendances: {},
+    reports: [],
+    documentations: []
+  });
   const [selectedOrgStudentId, setSelectedOrgStudentId] = useState('');
   const [selectedOrgRoleId, setSelectedOrgRoleId] = useState('');
   const [selectedOrgPeriodId, setSelectedOrgPeriodId] = useState('');
@@ -562,7 +589,114 @@ const Dashboard = () => {
       loadCandidatesData();
       loadVotesData();
     }
+    if (activeMenu === 'kas') {
+      loadKasData(kasMonth, kasYear);
+    }
   }, [activeMenu, userData]);
+
+  useEffect(() => {
+    if (activeMenu === 'proker-detail' && selectedProkerDetail) {
+      const saved = localStorage.getItem(`osis_proker_details_${selectedProkerDetail.id}`);
+      if (saved) {
+        setProkerSubData(JSON.parse(saved));
+      } else {
+        const defaultData = {
+          proposals: [
+            { id: 'prop-1', title: `Proposal Kegiatan ${selectedProkerDetail.name}`, status: 'Diajukan', fileUrl: 'https://docs.google.com/document/d/example', createdAt: new Date().toLocaleDateString('id-ID') }
+          ],
+          meetings: [
+            { id: 'meet-1', title: 'Rapat Persiapan Awal', date: selectedProkerDetail.targetDate, description: 'Membahas konsep dan pembentukan panitia.' }
+          ],
+          divisions: [
+            { id: 'div-1', name: 'Divisi Acara' },
+            { id: 'div-2', name: 'Divisi Humas & Dokumentasi' },
+            { id: 'div-3', name: 'Divisi Perlengkapan' }
+          ],
+          members: [
+            { id: 'mem-1', divisionId: 'div-1', name: 'Alif Rahman', role: 'Koordinator' },
+            { id: 'mem-2', divisionId: 'div-1', name: 'Clara Sinta', role: 'Anggota' },
+            { id: 'mem-3', divisionId: 'div-2', name: 'Rian Dwi', role: 'Koordinator' },
+            { id: 'mem-4', divisionId: 'div-3', name: 'Fadel Tri', role: 'Koordinator' }
+          ],
+          attendances: {
+            'meet-1': {
+              'mem-1': 'PRESENT',
+              'mem-2': 'PRESENT',
+              'mem-3': 'SICK',
+              'mem-4': 'ABSENT'
+            }
+          },
+          reports: [],
+          documentations: []
+        };
+        setProkerSubData(defaultData);
+        localStorage.setItem(`osis_proker_details_${selectedProkerDetail.id}`, JSON.stringify(defaultData));
+      }
+    }
+  }, [activeMenu, selectedProkerDetail]);
+
+  const updateProkerSubData = (newData: any) => {
+    if (!selectedProkerDetail) return;
+    setProkerSubData(newData);
+    localStorage.setItem(`osis_proker_details_${selectedProkerDetail.id}`, JSON.stringify(newData));
+  };
+
+  const loadKasData = async (m?: number, y?: number) => {
+    setKasLoading(true);
+    setKasError(null);
+    const targetMonth = m !== undefined ? m : kasMonth;
+    const targetYear = y !== undefined ? y : kasYear;
+    try {
+      const data = await authApi.getKasData(targetMonth, targetYear);
+      setKasData(data);
+    } catch (err: any) {
+      console.error(err);
+      setKasError('Gagal memuat data kas OSIS.');
+    } finally {
+      setKasLoading(false);
+    }
+  };
+
+  const handleRecordKasPayment = async (classId: string, classname: string, requiredAmount: number) => {
+    const monthNames = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    const confirmPay = window.confirm(`Apakah Anda yakin ingin menandai kelas ${classname} sudah bayar kas sebesar Rp ${requiredAmount.toLocaleString('id-ID')} untuk bulan ${monthNames[kasMonth - 1]} ${kasYear}? Tindakan ini tidak dapat dibatalkan dan uang akan langsung masuk.`);
+    if (!confirmPay) return;
+    
+    try {
+      await authApi.recordKasPayment(classId, kasMonth, kasYear);
+      loadKasData(kasMonth, kasYear);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Gagal merekam pembayaran kas.');
+    }
+  };
+
+  const handlePrevMonth = () => {
+    let prevMonth = kasMonth - 1;
+    let prevYear = kasYear;
+    if (prevMonth < 1) {
+      prevMonth = 12;
+      prevYear = kasYear - 1;
+    }
+    setKasMonth(prevMonth);
+    setKasYear(prevYear);
+    loadKasData(prevMonth, prevYear);
+  };
+
+  const handleNextMonth = () => {
+    let nextMonth = kasMonth + 1;
+    let nextYear = kasYear;
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear = kasYear + 1;
+    }
+    setKasMonth(nextMonth);
+    setKasYear(nextYear);
+    loadKasData(nextMonth, nextYear);
+  };
 
   const loadClassesData = async () => {
     try {
@@ -863,9 +997,9 @@ const Dashboard = () => {
       await authApi.deleteRole(id);
       loadRolesData();
       showToast('Peran (Role) berhasil dihapus!');
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert('Gagal menghapus peran');
+      alert(e.response?.data?.message || 'Gagal menghapus peran');
     }
   };
 
@@ -1369,9 +1503,9 @@ const Dashboard = () => {
       setActiveModal(null);
       loadProkersData();
       showToast('Program kerja OSIS berhasil diperbarui!');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Gagal mengedit program kerja');
+      alert(err.response?.data?.message || 'Gagal mengedit program kerja');
     }
   };
 
@@ -1390,9 +1524,9 @@ const Dashboard = () => {
       await authApi.deleteProker(id);
       loadProkersData();
       showToast('Program kerja OSIS berhasil dihapus!');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Gagal menghapus program kerja');
+      alert(err.response?.data?.message || 'Gagal menghapus program kerja');
     }
   };
 
@@ -2303,7 +2437,15 @@ const Dashboard = () => {
                         return (
                           <div key={p.id} className="proker-timeline-item">
                             <div className={`proker-timeline-dot ${dotClass}`} />
-                            <div className="proker-timeline-content">
+                            <div 
+                              className="proker-timeline-content" 
+                              style={{ cursor: 'pointer' }} 
+                              onClick={() => {
+                                setSelectedProkerDetail(p);
+                                setProkerTab('overview');
+                                navigate('/proker-detail');
+                              }}
+                            >
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', paddingRight: userData.role === 'superadmin' ? '80px' : '0' }}>
                                 <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--primary-navy)' }}>
                                   {p.name}
@@ -2333,9 +2475,12 @@ const Dashboard = () => {
                               )}
 
                               {userData.role === 'superadmin' && (
-                                <div style={{ position: 'absolute', top: '16px', right: '16px', display: 'flex', gap: '6px' }}>
+                                <div style={{ position: 'absolute', top: '16px', right: '16px', display: 'flex', gap: '6px' }} onClick={e => e.stopPropagation()}>
                                   <button 
-                                    onClick={() => handleStartEditProker(p)} 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartEditProker(p);
+                                    }} 
                                     className="action-btn action-btn-warning"
                                     style={{ padding: '4px 8px' }}
                                     title="Edit Proker"
@@ -2344,7 +2489,10 @@ const Dashboard = () => {
                                     <Edit2 size={12} />
                                   </button>
                                   <button 
-                                    onClick={() => handleDeleteProker(p.id)} 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteProker(p.id);
+                                    }} 
                                     className="action-btn action-btn-danger"
                                     style={{ padding: '4px 8px' }}
                                     title="Hapus Proker"
@@ -2361,6 +2509,844 @@ const Dashboard = () => {
                     )}
                   </div>
                 </>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+
+      case 'proker-detail': {
+        if (!selectedProkerDetail) {
+          return (
+            <div className="theme-card" style={{ padding: '24px', textAlign: 'center' }}>
+              <p style={{ color: 'var(--text-muted)' }}>Program Kerja tidak ditemukan atau belum dipilih.</p>
+              <button className="btn-primary-sm" onClick={() => navigate('/proker')}>Kembali ke Daftar Proker</button>
+            </div>
+          );
+        }
+
+        const canEditProkerDetails = ['superadmin', 'president', 'vice president', 'treasurer', 'secretaris'].includes(userData?.role || '');
+        const p = selectedProkerDetail;
+        const subData = prokerSubData || { proposals: [], meetings: [], divisions: [], members: [], attendances: {}, reports: [], documentations: [] };
+
+        const handleAddProposal = (e: React.FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          const title = fd.get('title') as string;
+          const fileUrl = fd.get('fileUrl') as string;
+          if (!title) return;
+
+          const newProposal = {
+            id: 'prop-' + Date.now(),
+            title,
+            fileUrl: fileUrl || '',
+            status: 'Diajukan',
+            createdAt: new Date().toLocaleDateString('id-ID')
+          };
+
+          updateProkerSubData({
+            ...subData,
+            proposals: [...(subData.proposals || []), newProposal]
+          });
+          e.currentTarget.reset();
+          showToast('Proposal berhasil diajukan!');
+        };
+
+        const handleDeleteProposal = (id: string) => {
+          if (!window.confirm('Hapus proposal ini?')) return;
+          updateProkerSubData({
+            ...subData,
+            proposals: (subData.proposals || []).filter((x: any) => x.id !== id)
+          });
+          showToast('Proposal berhasil dihapus!');
+        };
+
+        const handleUpdateProposalStatus = (id: string, status: string) => {
+          updateProkerSubData({
+            ...subData,
+            proposals: (subData.proposals || []).map((x: any) => x.id === id ? { ...x, status } : x)
+          });
+          showToast('Status proposal berhasil diperbarui!');
+        };
+
+        const handleAddMeeting = (e: React.FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          const title = fd.get('title') as string;
+          const date = fd.get('date') as string;
+          const description = fd.get('description') as string;
+          if (!title || !date) return;
+
+          const newMeeting = {
+            id: 'meet-' + Date.now(),
+            title,
+            date,
+            description: description || ''
+          };
+
+          updateProkerSubData({
+            ...subData,
+            meetings: [...(subData.meetings || []), newMeeting]
+          });
+          e.currentTarget.reset();
+          showToast('Rapat berhasil dijadwalkan!');
+        };
+
+        const handleDeleteMeeting = (id: string) => {
+          if (!window.confirm('Hapus rapat ini?')) return;
+          const newAttendances = { ...subData.attendances };
+          delete newAttendances[id];
+
+          updateProkerSubData({
+            ...subData,
+            meetings: (subData.meetings || []).filter((x: any) => x.id !== id),
+            attendances: newAttendances
+          });
+          showToast('Rapat berhasil dihapus!');
+        };
+
+        const handleAddDivision = (e: React.FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          const name = fd.get('name') as string;
+          if (!name) return;
+
+          const newDiv = {
+            id: 'div-' + Date.now(),
+            name
+          };
+
+          updateProkerSubData({
+            ...subData,
+            divisions: [...(subData.divisions || []), newDiv]
+          });
+          e.currentTarget.reset();
+          showToast('Divisi berhasil ditambahkan!');
+        };
+
+        const handleDeleteDivision = (id: string) => {
+          if (!window.confirm('Hapus divisi ini? Semua anggota di divisi ini akan dihapus juga.')) return;
+          updateProkerSubData({
+            ...subData,
+            divisions: (subData.divisions || []).filter((x: any) => x.id !== id),
+            members: (subData.members || []).filter((x: any) => x.divisionId !== id)
+          });
+          showToast('Divisi berhasil dihapus!');
+        };
+
+        const handleAddMember = (e: React.FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          const name = fd.get('name') as string;
+          const role = fd.get('role') as string;
+          const divisionId = fd.get('divisionId') as string;
+          if (!name || !role || !divisionId) return;
+
+          const newMember = {
+            id: 'mem-' + Date.now(),
+            divisionId,
+            name,
+            role
+          };
+
+          updateProkerSubData({
+            ...subData,
+            members: [...(subData.members || []), newMember]
+          });
+          e.currentTarget.reset();
+          showToast('Anggota berhasil ditambahkan!');
+        };
+
+        const handleDeleteMember = (id: string) => {
+          if (!window.confirm('Hapus anggota ini?')) return;
+          updateProkerSubData({
+            ...subData,
+            members: (subData.members || []).filter((x: any) => x.id !== id)
+          });
+          showToast('Anggota berhasil dihapus!');
+        };
+
+        const handleRecordAttendance = (meetingId: string, memberId: string, status: string) => {
+          const meetingAttendances = subData.attendances[meetingId] || {};
+          const updatedAttendances = {
+            ...subData.attendances,
+            [meetingId]: {
+              ...meetingAttendances,
+              [memberId]: status
+            }
+          };
+
+          updateProkerSubData({
+            ...subData,
+            attendances: updatedAttendances
+          });
+        };
+
+        const handleAddReport = (e: React.FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          const title = fd.get('title') as string;
+          const summary = fd.get('summary') as string;
+          const fileUrl = fd.get('fileUrl') as string;
+          if (!title) return;
+
+          const newReport = {
+            id: 'rep-' + Date.now(),
+            title,
+            summary: summary || '',
+            fileUrl: fileUrl || '',
+            status: 'Diajukan',
+            createdAt: new Date().toLocaleDateString('id-ID')
+          };
+
+          updateProkerSubData({
+            ...subData,
+            reports: [...(subData.reports || []), newReport]
+          });
+          e.currentTarget.reset();
+          showToast('Laporan berhasil diajukan!');
+        };
+
+        const handleDeleteReport = (id: string) => {
+          if (!window.confirm('Hapus laporan ini?')) return;
+          updateProkerSubData({
+            ...subData,
+            reports: (subData.reports || []).filter((x: any) => x.id !== id)
+          });
+          showToast('Laporan berhasil dihapus!');
+        };
+
+        const handleUpdateReportStatus = (id: string, status: string) => {
+          updateProkerSubData({
+            ...subData,
+            reports: (subData.reports || []).map((x: any) => x.id === id ? { ...x, status } : x)
+          });
+          showToast('Status laporan berhasil diperbarui!');
+        };
+
+        const handleAddDocumentation = (e: React.FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          const title = fd.get('title') as string;
+          const imageUrl = fd.get('imageUrl') as string;
+          if (!title || !imageUrl) return;
+
+          const newDoc = {
+            id: 'doc-' + Date.now(),
+            title,
+            imageUrl,
+            createdAt: new Date().toLocaleDateString('id-ID')
+          };
+
+          updateProkerSubData({
+            ...subData,
+            documentations: [...(subData.documentations || []), newDoc]
+          });
+          e.currentTarget.reset();
+          showToast('Dokumentasi berhasil ditambahkan!');
+        };
+
+        const handleDeleteDocumentation = (id: string) => {
+          if (!window.confirm('Hapus dokumentasi ini?')) return;
+          updateProkerSubData({
+            ...subData,
+            documentations: (subData.documentations || []).filter((x: any) => x.id !== id)
+          });
+          showToast('Dokumentasi berhasil dihapus!');
+        };
+
+        const tabs = [
+          { key: 'overview', label: 'Overview', icon: <Info size={15} /> },
+          { key: 'proposal', label: 'Proposal', icon: <FileText size={15} /> },
+          { key: 'rapat', label: 'Rapat', icon: <Users size={15} /> },
+          { key: 'divisi', label: 'Divisi', icon: <Folder size={15} /> },
+          { key: 'anggota', label: 'Anggota', icon: <UserPlus size={15} /> },
+          { key: 'absensi', label: 'Absensi', icon: <CheckSquare size={15} /> },
+          { key: 'laporan', label: 'Laporan', icon: <Award size={15} /> },
+          { key: 'dokumentasi', label: 'Dokumentasi', icon: <ImageIcon size={15} /> }
+        ];
+
+        return (
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--card-border)', paddingBottom: '16px', flexShrink: 0, flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button 
+                  onClick={() => navigate('/proker')} 
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 600 }}
+                >
+                  <ArrowLeft size={16} /> Kembali
+                </button>
+                <div style={{ borderLeft: '1px solid var(--card-border)', height: '20px' }}></div>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--primary-navy)' }}>
+                    {p.name}
+                  </h2>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Target: {p.targetDate}</span>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Status Proker:</span>
+                <span className={`badge badge-${p.status === 'Selesai' ? 'success' : p.status === 'Berjalan' ? 'warning' : 'secondary'}`} style={{ color: p.status === 'Selesai' ? 'var(--success)' : p.status === 'Berjalan' ? 'var(--warning)' : 'var(--text-muted)', padding: '4px 10px', fontSize: '12px', borderRadius: '6px' }}>
+                  {p.status}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--card-border)', gap: '8px', overflowX: 'auto', padding: '10px 0 0 0', flexShrink: 0 }} className="custom-scrollbar">
+              {tabs.map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setProkerTab(tab.key as any)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '10px 16px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: prokerTab === tab.key ? '2px solid var(--secondary-blue)' : '2px solid transparent',
+                    color: prokerTab === tab.key ? 'var(--secondary-blue)' : 'var(--text-muted)',
+                    fontWeight: prokerTab === tab.key ? 700 : 500,
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto', marginTop: '20px', paddingRight: '8px' }}>
+              {prokerTab === 'overview' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                    <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Proposal Diajukan</span>
+                      <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--secondary-blue)' }}>{subData.proposals?.length || 0}</h4>
+                    </div>
+                    <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Rencana Rapat</span>
+                      <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--warning)' }}>{subData.meetings?.length || 0}</h4>
+                    </div>
+                    <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Divisi Kepanitiaan</span>
+                      <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--primary-navy)' }}>{subData.divisions?.length || 0}</h4>
+                    </div>
+                    <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Jumlah Anggota</span>
+                      <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--success)' }}>{subData.members?.length || 0}</h4>
+                    </div>
+                  </div>
+
+                  <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', background: 'var(--bg-soft-white)' }}>
+                    <h3 style={{ fontSize: '15px', margin: '0 0 10px 0', color: 'var(--primary-navy)' }}>Deskripsi Kegiatan</h3>
+                    <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.6', color: 'var(--text-dark)' }}>
+                      {p.description || 'Tidak ada deskripsi yang ditambahkan untuk program kerja ini.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {prokerTab === 'proposal' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {canEditProkerDetails && (
+                    <form onSubmit={handleAddProposal} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
+                      <div style={{ flex: 2, minWidth: '200px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Judul Proposal</label>
+                        <input name="title" required type="text" className="form-input" placeholder="Masukkan judul proposal..." style={{ margin: 0 }} />
+                      </div>
+                      <div style={{ flex: 2, minWidth: '200px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Link Dokumen / File</label>
+                        <input name="fileUrl" type="url" className="form-input" placeholder="https://docs.google.com/..." style={{ margin: 0 }} />
+                      </div>
+                      <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Plus size={16} /> Ajukan
+                      </button>
+                    </form>
+                  )}
+
+                  <div className="admin-table-container">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Judul Proposal</th>
+                          <th>Tanggal Pengajuan</th>
+                          <th>Link Dokumen</th>
+                          <th>Status</th>
+                          {canEditProkerDetails && <th style={{ textAlign: 'center', width: '150px' }}>Aksi</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {!subData.proposals || subData.proposals.length === 0 ? (
+                          <tr>
+                            <td colSpan={canEditProkerDetails ? 5 : 4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                              Belum ada proposal yang diajukan.
+                            </td>
+                          </tr>
+                        ) : (
+                          subData.proposals.map((x: any) => (
+                            <tr key={x.id}>
+                              <td style={{ fontWeight: 600 }}>{x.title}</td>
+                              <td>{x.createdAt}</td>
+                              <td>
+                                {x.fileUrl ? (
+                                  <a href={x.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--secondary-blue)', textDecoration: 'underline', fontSize: '13px' }}>Buka Dokumen</a>
+                                ) : (
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Tidak ada link</span>
+                                )}
+                              </td>
+                              <td>
+                                <span className={`badge badge-${x.status === 'Disetujui' ? 'success' : x.status === 'Ditolak' ? 'danger' : 'warning'}`} style={{ color: x.status === 'Disetujui' ? 'var(--success)' : x.status === 'Ditolak' ? 'var(--danger)' : 'var(--warning)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
+                                  {x.status}
+                                </span>
+                              </td>
+                              {canEditProkerDetails && (
+                                <td style={{ textAlign: 'center' }}>
+                                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                    <select
+                                      value={x.status}
+                                      onChange={(e) => handleUpdateProposalStatus(x.id, e.target.value)}
+                                      style={{ padding: '2px 4px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--card-border)' }}
+                                    >
+                                      <option value="Diajukan">Diajukan</option>
+                                      <option value="Disetujui">Disetujui</option>
+                                      <option value="Ditolak">Ditolak</option>
+                                    </select>
+                                    <button
+                                      onClick={() => handleDeleteProposal(x.id)}
+                                      style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '2px' }}
+                                      title="Hapus"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {prokerTab === 'rapat' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {canEditProkerDetails && (
+                    <form onSubmit={handleAddMeeting} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
+                      <div style={{ flex: 2, minWidth: '180px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Agenda Rapat</label>
+                        <input name="title" required type="text" className="form-input" placeholder="Pembahasan rundown..." style={{ margin: 0 }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: '150px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Tanggal / Jam</label>
+                        <input name="date" required type="text" className="form-input" placeholder="10 Agustus, 13:00" style={{ margin: 0 }} />
+                      </div>
+                      <div style={{ flex: 2, minWidth: '180px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Deskripsi Rapat</label>
+                        <input name="description" type="text" className="form-input" placeholder="Tempat rapat, pembahasan detail..." style={{ margin: 0 }} />
+                      </div>
+                      <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Plus size={16} /> Jadwalkan
+                      </button>
+                    </form>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {!subData.meetings || subData.meetings.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '8px' }}>
+                        Belum ada jadwal rapat panitia.
+                      </div>
+                    ) : (
+                      subData.meetings.map((x: any) => (
+                        <div key={x.id} className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--primary-navy)' }}>{x.title}</h4>
+                            <span style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>Waktu: {x.date}</span>
+                            {x.description && <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>{x.description}</p>}
+                          </div>
+                          {canEditProkerDetails && (
+                            <button
+                              onClick={() => handleDeleteMeeting(x.id)}
+                              style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '6px' }}
+                              title="Hapus Rapat"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {prokerTab === 'divisi' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {canEditProkerDetails && (
+                    <form onSubmit={handleAddDivision} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
+                      <div style={{ flex: 1, minWidth: '220px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Nama Divisi Baru</label>
+                        <input name="name" required type="text" className="form-input" placeholder="Divisi Perlengkapan..." style={{ margin: 0 }} />
+                      </div>
+                      <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Plus size={16} /> Tambah Divisi
+                      </button>
+                    </form>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+                    {!subData.divisions || subData.divisions.length === 0 ? (
+                      <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '8px' }}>
+                        Belum ada divisi yang dibuat.
+                      </div>
+                    ) : (
+                      subData.divisions.map((x: any) => {
+                        const divMemberCount = (subData.members || []).filter((m: any) => m.divisionId === x.id).length;
+                        return (
+                          <div key={x.id} className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--primary-navy)' }}>{x.name}</h4>
+                              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{divMemberCount} Anggota</span>
+                            </div>
+                            {canEditProkerDetails && (
+                              <button
+                                onClick={() => handleDeleteDivision(x.id)}
+                                style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
+                                title="Hapus Divisi"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {prokerTab === 'anggota' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {canEditProkerDetails && (subData.divisions?.length || 0) > 0 && (
+                    <form onSubmit={handleAddMember} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
+                      <div style={{ flex: 2, minWidth: '180px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Nama Anggota</label>
+                        <input name="name" required type="text" className="form-input" placeholder="Masukkan nama..." style={{ margin: 0 }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: '140px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Jabatan</label>
+                        <select name="role" required className="form-input" style={{ margin: 0 }}>
+                          <option value="Koordinator">Koordinator</option>
+                          <option value="Anggota">Anggota</option>
+                        </select>
+                      </div>
+                      <div style={{ flex: 2, minWidth: '180px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Divisi</label>
+                        <select name="divisionId" required className="form-input" style={{ margin: 0 }}>
+                          {(subData.divisions || []).map((d: any) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Plus size={16} /> Tambah Anggota
+                      </button>
+                    </form>
+                  )}
+
+                  <div className="admin-table-container">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Nama Anggota</th>
+                          <th>Divisi</th>
+                          <th>Jabatan</th>
+                          {canEditProkerDetails && <th style={{ textAlign: 'center', width: '100px' }}>Aksi</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {!subData.members || subData.members.length === 0 ? (
+                          <tr>
+                            <td colSpan={canEditProkerDetails ? 4 : 3} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                              Belum ada anggota panitia yang ditambahkan.
+                            </td>
+                          </tr>
+                        ) : (
+                          subData.members.map((x: any) => {
+                            const div = (subData.divisions || []).find((d: any) => d.id === x.divisionId);
+                            return (
+                              <tr key={x.id}>
+                                <td style={{ fontWeight: 600 }}>{x.name}</td>
+                                <td>{div ? div.name : '-'}</td>
+                                <td>
+                                  <span className={`badge badge-${x.role === 'Koordinator' ? 'primary' : 'secondary'}`} style={{ color: x.role === 'Koordinator' ? 'var(--secondary-blue)' : 'var(--text-muted)', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
+                                    {x.role}
+                                  </span>
+                                </td>
+                                {canEditProkerDetails && (
+                                  <td style={{ textAlign: 'center' }}>
+                                    <button
+                                      onClick={() => handleDeleteMember(x.id)}
+                                      style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '2px' }}
+                                      title="Hapus"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {prokerTab === 'absensi' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Pilih Rapat:</span>
+                    <select
+                      className="form-input"
+                      style={{ width: '250px', margin: 0 }}
+                      value={activeProkerMeetingId}
+                      onChange={e => setActiveProkerMeetingId(e.target.value)}
+                    >
+                      <option value="">-- Pilih Rapat --</option>
+                      {(subData.meetings || []).map((m: any) => (
+                        <option key={m.id} value={m.id}>{m.title} ({m.date})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {activeProkerMeetingId ? (
+                    <div className="admin-table-container">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>Nama Anggota</th>
+                            <th>Divisi</th>
+                            <th>Status Absensi</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {!subData.members || subData.members.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                                Belum ada anggota panitia. Tambahkan anggota terlebih dahulu.
+                              </td>
+                            </tr>
+                          ) : (
+                            subData.members.map((x: any) => {
+                              const div = (subData.divisions || []).find((d: any) => d.id === x.divisionId);
+                              const currentStatus = (subData.attendances[activeProkerMeetingId] || {})[x.id] || 'PRESENT';
+
+                              return (
+                                <tr key={x.id}>
+                                  <td style={{ fontWeight: 600 }}>{x.name}</td>
+                                  <td>{div ? div.name : '-'}</td>
+                                  <td>
+                                    {canEditProkerDetails ? (
+                                      <div style={{ display: 'flex', gap: '6px' }}>
+                                        {[
+                                          { key: 'PRESENT', label: 'Hadir', bg: 'var(--success)' },
+                                          { key: 'SICK', label: 'Sakit', bg: 'var(--warning)' },
+                                          { key: 'PERMIT', label: 'Izin', bg: 'var(--secondary-blue)' },
+                                          { key: 'ABSENT', label: 'Alpa', bg: 'var(--danger)' }
+                                        ].map(opt => (
+                                          <button
+                                            key={opt.key}
+                                            onClick={() => handleRecordAttendance(activeProkerMeetingId, x.id, opt.key)}
+                                            style={{
+                                              padding: '4px 10px',
+                                              fontSize: '11px',
+                                              fontWeight: 700,
+                                              borderRadius: '4px',
+                                              border: 'none',
+                                              cursor: 'pointer',
+                                              background: currentStatus === opt.key ? opt.bg : 'var(--card-border)',
+                                              color: currentStatus === opt.key ? '#ffffff' : 'var(--text-muted)',
+                                              transition: 'all 0.15s ease'
+                                            }}
+                                          >
+                                            {opt.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span style={{ fontSize: '12px', fontWeight: 700, color: currentStatus === 'PRESENT' ? 'var(--success)' : currentStatus === 'SICK' ? 'var(--warning)' : currentStatus === 'PERMIT' ? 'var(--secondary-blue)' : 'var(--danger)' }}>
+                                        {currentStatus === 'PRESENT' ? 'Hadir' : currentStatus === 'SICK' ? 'Sakit' : currentStatus === 'PERMIT' ? 'Izin' : 'Alpa'}
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '8px' }}>
+                      Silakan pilih agenda rapat di atas untuk mengisi/melihat absensi kehadiran.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {prokerTab === 'laporan' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {canEditProkerDetails && (
+                    <form onSubmit={handleAddReport} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
+                      <div style={{ flex: 2, minWidth: '180px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Judul Laporan (LPJ)</label>
+                        <input name="title" required type="text" className="form-input" placeholder="Laporan Pertanggungjawaban MPLS..." style={{ margin: 0 }} />
+                      </div>
+                      <div style={{ flex: 2, minWidth: '180px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Ringkasan Hasil</label>
+                        <input name="summary" type="text" className="form-input" placeholder="Acara berjalan sukses dengan kehadiran..." style={{ margin: 0 }} />
+                      </div>
+                      <div style={{ flex: 2, minWidth: '180px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Link File Laporan</label>
+                        <input name="fileUrl" type="url" className="form-input" placeholder="https://docs.google.com/..." style={{ margin: 0 }} />
+                      </div>
+                      <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Plus size={16} /> Ajukan
+                      </button>
+                    </form>
+                  )}
+
+                  <div className="admin-table-container">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Judul Laporan</th>
+                          <th>Ringkasan Hasil</th>
+                          <th>Tanggal Dibuat</th>
+                          <th>Link Laporan</th>
+                          <th>Status</th>
+                          {canEditProkerDetails && <th style={{ textAlign: 'center', width: '150px' }}>Aksi</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {!subData.reports || subData.reports.length === 0 ? (
+                          <tr>
+                            <td colSpan={canEditProkerDetails ? 6 : 5} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                              Belum ada laporan pertanggungjawaban yang diajukan.
+                            </td>
+                          </tr>
+                        ) : (
+                          subData.reports.map((x: any) => (
+                            <tr key={x.id}>
+                              <td style={{ fontWeight: 600 }}>{x.title}</td>
+                              <td>{x.summary || '-'}</td>
+                              <td>{x.createdAt}</td>
+                              <td>
+                                {x.fileUrl ? (
+                                  <a href={x.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--secondary-blue)', textDecoration: 'underline', fontSize: '13px' }}>Buka Laporan</a>
+                                ) : (
+                                  <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Tidak ada link</span>
+                                )}
+                              </td>
+                              <td>
+                                <span className={`badge badge-${x.status === 'Disetujui' ? 'success' : x.status === 'Ditolak' ? 'danger' : 'warning'}`} style={{ color: x.status === 'Disetujui' ? 'var(--success)' : x.status === 'Ditolak' ? 'var(--danger)' : 'var(--warning)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
+                                  {x.status}
+                                </span>
+                              </td>
+                              {canEditProkerDetails && (
+                                <td style={{ textAlign: 'center' }}>
+                                  <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                    <select
+                                      value={x.status}
+                                      onChange={(e) => handleUpdateReportStatus(x.id, e.target.value)}
+                                      style={{ padding: '2px 4px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--card-border)' }}
+                                    >
+                                      <option value="Diajukan">Diajukan</option>
+                                      <option value="Disetujui">Disetujui</option>
+                                      <option value="Ditolak">Ditolak</option>
+                                    </select>
+                                    <button
+                                      onClick={() => handleDeleteReport(x.id)}
+                                      style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '2px' }}
+                                      title="Hapus"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {prokerTab === 'dokumentasi' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {canEditProkerDetails && (
+                    <form onSubmit={handleAddDocumentation} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
+                      <div style={{ flex: 2, minWidth: '200px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Judul Kegiatan / Foto</label>
+                        <input name="title" required type="text" className="form-input" placeholder="Pelepasan balon HUT RI..." style={{ margin: 0 }} />
+                      </div>
+                      <div style={{ flex: 3, minWidth: '250px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>URL Gambar Dokumentasi</label>
+                        <input name="imageUrl" required type="url" className="form-input" placeholder="https://images.unsplash.com/example.jpg" style={{ margin: 0 }} />
+                      </div>
+                      <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Plus size={16} /> Unggah
+                      </button>
+                    </form>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
+                    {!subData.documentations || subData.documentations.length === 0 ? (
+                      <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '8px' }}>
+                        Belum ada foto dokumentasi kegiatan yang ditambahkan.
+                      </div>
+                    ) : (
+                      subData.documentations.map((x: any) => (
+                        <div key={x.id} className="theme-card" style={{ padding: '0', overflow: 'hidden', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column' }}>
+                          <img 
+                            src={x.imageUrl} 
+                            alt={x.title} 
+                            style={{ width: '100%', height: '160px', objectFit: 'cover' }} 
+                            onError={(e) => {
+                              e.currentTarget.src = "https://images.unsplash.com/photo-1544717305-2782549b5136?q=80&w=600";
+                            }}
+                          />
+                          <div style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <h4 style={{ margin: '0 0 2px 0', fontSize: '13px', fontWeight: 700, color: 'var(--primary-navy)' }}>{x.title}</h4>
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Diunggah: {x.createdAt}</span>
+                            </div>
+                            {canEditProkerDetails && (
+                              <button
+                                onClick={() => handleDeleteDocumentation(x.id)}
+                                style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
+                                title="Hapus Dokumentasi"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -3555,6 +4541,286 @@ const Dashboard = () => {
           </div>
         );
 
+      case 'kas': {
+        if (kasLoading && !kasData) {
+          return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: '300px' }}>
+              <div className="spinner" style={{ width: '40px', height: '40px' }}></div>
+              <span style={{ marginLeft: '12px' }}>Memuat data keuangan kas...</span>
+            </div>
+          );
+        }
+
+        if (kasError) {
+          return (
+            <div className="error-banner" style={{ margin: '20px 0' }}>
+              <ShieldAlert size={20} style={{ flexShrink: 0 }} />
+              <span>{kasError}</span>
+            </div>
+          );
+        }
+
+        if (!kasData || !kasData.activePeriod) {
+          return (
+            <div className="theme-card profile-card" style={{ gridColumn: 'span 2', textAlign: 'center', padding: '40px' }}>
+              <ShieldAlert size={48} color="var(--warning)" style={{ marginBottom: '16px' }} />
+              <h2 className="profile-card-title" style={{ borderBottom: 'none', justifyContent: 'center' }}>
+                Tidak Ada Periode Aktif
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
+                Saat ini tidak ada periode kepengurusan OSIS yang aktif. Silakan hubungi Superadmin untuk mengaktifkan periode kepengurusan terlebih dahulu di menu <strong>Manage Period</strong>.
+              </p>
+            </div>
+          );
+        }
+
+        const { activePeriod, classes: kasClasses } = kasData;
+
+        // Perform calculations
+        const totalPaidAmount = kasClasses.reduce((sum, cls) => sum + (cls.isPaid ? cls.requiredPayment : 0), 0);
+        const totalEstimatedAmount = kasClasses.reduce((sum, cls) => sum + cls.requiredPayment, 0);
+        const paidClassesCount = kasClasses.filter(cls => cls.isPaid).length;
+        const totalClassesCount = kasClasses.length;
+
+        // Filter based on search query
+        const filteredKasClasses = kasClasses.filter(cls => {
+          const searchLower = adminSearch.toLowerCase();
+          return (
+            cls.classname.toLowerCase().includes(searchLower) ||
+            cls.grade.toLowerCase().includes(searchLower) ||
+            cls.major.toLowerCase().includes(searchLower) ||
+            cls.majorCode.toLowerCase().includes(searchLower)
+          );
+        });
+
+        // Determine if user can edit/check payments
+        const canEditKas = ['superadmin', 'treasurer', 'president', 'vice president'].includes(userData.role);
+
+        const monthNames = [
+          'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+          'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        ];
+
+        return (
+          <div className="theme-card profile-card animate-slideup" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
+              <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
+                <Coins size={20} color="var(--secondary-blue)" />
+                Manajemen Kas OSIS
+              </h2>
+              
+              {/* Month Navigation Control */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--bg-soft-white)', padding: '6px 12px', borderRadius: '12px', border: '1px solid var(--card-border)' }}>
+                <button 
+                  onClick={handlePrevMonth}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    color: 'var(--text-dark)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    fontWeight: 700,
+                    fontSize: '16px',
+                    transition: 'var(--transition)'
+                  }}
+                  onMouseOver={e => e.currentTarget.style.background = 'var(--card-bg)'}
+                  onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  &lt;
+                </button>
+                <span style={{ fontSize: '14px', fontWeight: 700, minWidth: '120px', textAlign: 'center', userSelect: 'none', color: 'var(--text-dark)' }}>
+                  {monthNames[kasMonth - 1]} {kasYear}
+                </span>
+                <button 
+                  onClick={handleNextMonth}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    color: 'var(--text-dark)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    fontWeight: 700,
+                    fontSize: '16px',
+                    transition: 'var(--transition)'
+                  }}
+                  onMouseOver={e => e.currentTarget.style.background = 'var(--card-bg)'}
+                  onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  &gt;
+                </button>
+              </div>
+
+              <span style={{ fontSize: '14px', fontWeight: 600, padding: '6px 12px', borderRadius: '20px', background: 'rgba(37, 99, 235, 0.1)', color: 'var(--secondary-blue)' }}>
+                Periode Aktif: {activePeriod.yearLabel}
+              </span>
+            </div>
+            
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px', flexShrink: 0 }}>
+              Kelola pembayaran kas OSIS per kelas untuk periode kepengurusan aktif. Uang kas per kelas dihitung berdasarkan tarif <strong>Rp 5.000 per siswa</strong> terdaftar.
+            </p>
+
+            {/* Metrics Dashboard Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+              
+              {/* Metric 1 - Akumulasi Total */}
+              <div className="theme-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(37, 99, 235, 0.02) 100%)', border: '1px solid rgba(37, 99, 235, 0.15)' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Kas OSIS (Akumulasi)</span>
+                <span style={{ fontSize: '24px', fontWeight: 700, color: 'var(--secondary-blue)' }}>
+                  Rp {(kasData?.accumulatedTotal || 0).toLocaleString('id-ID')}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  <Coins size={14} color="var(--secondary-blue)" />
+                  <span>Total kas terkumpul semua bulan</span>
+                </div>
+              </div>
+
+              {/* Metric 2 - Kas Bulan Ini (Terkumpul / Target) */}
+              <div className="theme-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.02) 100%)', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Kas Bulan Ini</span>
+                <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--warning)', whiteSpace: 'nowrap' }}>
+                  Rp {totalPaidAmount.toLocaleString('id-ID')} / Rp {totalEstimatedAmount.toLocaleString('id-ID')}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  <Building size={14} color="var(--warning)" />
+                  <span>Kas terkumpul / target bulan ini</span>
+                </div>
+              </div>
+
+              {/* Metric 3 - Progress Kelas */}
+              <div className="theme-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Progres Kelas Terbayar</span>
+                <span style={{ fontSize: '24px', fontWeight: 700, color: 'var(--success)' }}>
+                  {paidClassesCount} / {totalClassesCount} Kelas
+                </span>
+                <div style={{ width: '100%', height: '6px', background: 'var(--card-border)', borderRadius: '99px', overflow: 'hidden', margin: '4px 0' }}>
+                  <div style={{ width: `${totalClassesCount ? (paidClassesCount / totalClassesCount) * 100 : 0}%`, height: '100%', background: 'var(--success)', transition: 'width 0.3s ease' }}></div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Filter and Search Box */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, maxWidth: '350px' }}>
+                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Cari kelas, grade, atau jurusan..." 
+                  style={{ paddingLeft: '40px', margin: 0 }}
+                  value={adminSearch}
+                  onChange={e => setAdminSearch(e.target.value)}
+                />
+              </div>
+              {!canEditKas && (
+                <div style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-soft-white)', padding: '8px 16px', borderRadius: '8px', color: 'var(--text-muted)' }}>
+                  <ShieldAlert size={16} color="var(--warning)" />
+                  <span>Mode Lihat Saja. Hanya Bendahara/Pengurus OSIS yang dapat mengonfirmasi setoran kas.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Table of Classes */}
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto' }}>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '80px', textAlign: 'center' }}>Bayar</th>
+                    <th>Nama Kelas</th>
+                    <th>Jurusan</th>
+                    <th style={{ textAlign: 'right' }}>Jumlah Siswa</th>
+                    <th style={{ textAlign: 'right' }}>Wajib Setor (Rp)</th>
+                    <th>Status Setoran</th>
+                    <th>Tanggal Bayar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredKasClasses.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                        Tidak ada data kelas yang cocok dengan pencarian Anda.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredKasClasses.map(cls => (
+                      <tr key={cls.id} style={{ transition: 'background-color 0.2s' }}>
+                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                            <span 
+                              onClick={() => {
+                                if (!cls.isPaid && canEditKas) {
+                                  handleRecordKasPayment(cls.id, `${cls.grade} - ${cls.majorCode} - ${cls.classname}`, cls.requiredPayment);
+                                }
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '22px',
+                                height: '22px',
+                                borderRadius: '6px',
+                                border: cls.isPaid ? '2px solid var(--success)' : '2px solid var(--input-border)',
+                                background: cls.isPaid ? 'var(--success)' : 'var(--input-bg)',
+                                cursor: cls.isPaid || !canEditKas ? 'default' : 'pointer',
+                                color: '#ffffff',
+                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: cls.isPaid ? '0 0 8px rgba(16, 185, 129, 0.3)' : 'none',
+                                userSelect: 'none'
+                              }}
+                              className="kas-custom-checkbox"
+                            >
+                              {cls.isPaid ? (
+                                <span style={{ fontSize: '13px', fontWeight: 900 }}>✓</span>
+                              ) : (
+                                <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: 'transparent' }}></span>
+                              )}
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{cls.grade} - {cls.classname}</td>
+                        <td>{cls.major} ({cls.majorCode})</td>
+                        <td style={{ textAlign: 'right', fontWeight: 500 }}>{cls.studentCount} siswa</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: cls.isPaid ? 'var(--success)' : 'var(--text-dark)' }}>
+                          Rp {cls.requiredPayment.toLocaleString('id-ID')}
+                        </td>
+                        <td>
+                          {cls.isPaid ? (
+                            <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)' }}>
+                              SUDAH BAYAR
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)' }}>
+                              BELUM BAYAR
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+                          {cls.isPaid && cls.paidAt ? new Date(cls.paidAt).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : '-'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+
       default:
         return <div>View tidak ditemukan</div>;
     }
@@ -3889,6 +5155,10 @@ const Dashboard = () => {
 
             <div className={`sidebar-item ${activeMenu === 'organization' ? 'active' : ''}`} onClick={() => navigate('/organization')}>
               <UserIcon size={16} /> Organization
+            </div>
+
+            <div className={`sidebar-item ${activeMenu === 'kas' ? 'active' : ''}`} onClick={() => navigate('/kas')}>
+              <Coins size={16} /> Kas OSIS
             </div>
           </div>
 

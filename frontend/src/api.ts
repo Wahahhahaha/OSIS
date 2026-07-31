@@ -269,6 +269,18 @@ export const authApi = {
     const response = await api.get('/admin/students');
     return response.data;
   },
+
+  // Kas OSIS
+  getKasData: async (month?: number, year?: number): Promise<{ activePeriod: any; selectedMonth: number; selectedYear: number; accumulatedTotal: number; classes: any[] }> => {
+    const response = await api.get('/admin/kas', {
+      params: { month, year }
+    });
+    return response.data;
+  },
+  recordKasPayment: async (classId: string, month: number, year: number): Promise<any> => {
+    const response = await api.post('/admin/kas/pay', { classId, month, year });
+    return response.data;
+  },
 };
 
 export default api;
