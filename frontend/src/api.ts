@@ -9,12 +9,18 @@ const api = axios.create({
   },
 });
 
-// Add a request interceptor to attach JWT token
+// Add a request interceptor to attach JWT token and geolocation coordinates
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    const lat = sessionStorage.getItem('user_latitude');
+    const lng = sessionStorage.getItem('user_longitude');
+    if (lat && lng && config.headers) {
+      config.headers['x-latitude'] = lat;
+      config.headers['x-longitude'] = lng;
     }
     return config;
   },
@@ -279,6 +285,30 @@ export const authApi = {
   },
   recordKasPayment: async (classId: string, month: number, year: number): Promise<any> => {
     const response = await api.post('/admin/kas/pay', { classId, month, year });
+    return response.data;
+  },
+  getActivityLogs: async (): Promise<any[]> => {
+    const response = await api.get('/admin/activity-logs');
+    return response.data;
+  },
+  getRecycleBin: async (): Promise<any> => {
+    const response = await api.get('/admin/recycle-bin');
+    return response.data;
+  },
+  restoreRecycleBinItem: async (type: string, id: string): Promise<any> => {
+    const response = await api.post('/admin/recycle-bin/restore', { type, id });
+    return response.data;
+  },
+  getPermissions: async (): Promise<any[]> => {
+    const response = await api.get('/admin/permissions');
+    return response.data;
+  },
+  updatePermission: async (roleName: string, menuKey: string, allowed: boolean): Promise<any> => {
+    const response = await api.post('/admin/permissions/update', { roleName, menuKey, allowed });
+    return response.data;
+  },
+  getMyPermissions: async (): Promise<string[]> => {
+    const response = await api.get('/permissions/my');
     return response.data;
   },
 };

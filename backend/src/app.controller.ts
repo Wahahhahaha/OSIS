@@ -68,6 +68,7 @@ export class AppController {
   @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
   async getClasses() {
     return this.prisma.class.findMany({
+      where: { deletedAt: null },
       include: {
         grade: true,
         major: true,
@@ -93,8 +94,9 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async deleteClass(@Param('id') id: string) {
-    return this.prisma.class.delete({
+    return this.prisma.class.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
   }
 
@@ -104,6 +106,7 @@ export class AppController {
   @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
   async getGrades() {
     return this.prisma.grade.findMany({
+      where: { deletedAt: null },
       orderBy: { gradename: 'asc' },
     });
   }
@@ -123,8 +126,9 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async deleteGrade(@Param('id') id: string) {
-    return this.prisma.grade.delete({
+    return this.prisma.grade.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
   }
 
@@ -134,6 +138,7 @@ export class AppController {
   @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
   async getMajors() {
     return this.prisma.major.findMany({
+      where: { deletedAt: null },
       orderBy: { majorcode: 'asc' },
     });
   }
@@ -154,8 +159,9 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async deleteMajor(@Param('id') id: string) {
-    return this.prisma.major.delete({
+    return this.prisma.major.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
   }
 
@@ -165,6 +171,7 @@ export class AppController {
   @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
   async getUsers() {
     const users = await this.prisma.user.findMany({
+      where: { deletedAt: null },
       include: {
         level: true,
         students: {
@@ -289,10 +296,11 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async deleteUser(@Param('id') id: string) {
-    await this.prisma.student.deleteMany({ where: { userid: id } });
-    await this.prisma.school.deleteMany({ where: { userid: id } });
-    await this.prisma.employer.deleteMany({ where: { userid: id } });
-    return this.prisma.user.delete({ where: { id } });
+    const deletedTime = new Date();
+    await this.prisma.student.updateMany({ where: { userid: id }, data: { deletedAt: deletedTime } });
+    await this.prisma.school.updateMany({ where: { userid: id }, data: { deletedAt: deletedTime } });
+    await this.prisma.employer.updateMany({ where: { userid: id }, data: { deletedAt: deletedTime } });
+    return this.prisma.user.update({ where: { id }, data: { deletedAt: deletedTime } });
   }
 
   async autoCheckElectedPairs() {
@@ -342,7 +350,29 @@ export class AppController {
           });
         }
 
-        // Check if there is already an organization member mapped for president and vice president in this period
+        // Deduplicate President and Vice President for this period if multiple exist
+        const allPresidents = await this.prisma.organizationMember.findMany({
+          where: { periodid: period.id, roleid: presidentRole.id },
+          orderBy: { createdAt: 'desc' }
+        });
+        if (allPresidents.length > 1) {
+          const keepId = allPresidents[0].id;
+          await this.prisma.organizationMember.deleteMany({
+            where: { periodid: period.id, roleid: presidentRole.id, id: { not: keepId } }
+          });
+        }
+
+        const allVicePresidents = await this.prisma.organizationMember.findMany({
+          where: { periodid: period.id, roleid: vicePresidentRole.id },
+          orderBy: { createdAt: 'desc' }
+        });
+        if (allVicePresidents.length > 1) {
+          const keepId = allVicePresidents[0].id;
+          await this.prisma.organizationMember.deleteMany({
+            where: { periodid: period.id, roleid: vicePresidentRole.id, id: { not: keepId } }
+          });
+        }
+
         const mappedPresident = await this.prisma.organizationMember.findFirst({
           where: {
             periodid: period.id,
@@ -601,9 +631,10 @@ export class AppController {
   // Manage Role Endpoints
   @Get('admin/roles')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair', 'student')
   async getRoles() {
     return this.prisma.role.findMany({
+      where: { deletedAt: null },
       orderBy: { rolename: 'asc' },
     });
   }
@@ -635,26 +666,19 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async deleteRole(@Param('id') id: string) {
-    try {
-      return await this.prisma.role.delete({
-        where: { id },
-      });
-    } catch (error: any) {
-      if (error.code === 'P2003') {
-        throw new BadRequestException(
-          'Peran (Role) tidak dapat dihapus karena sedang digunakan oleh data lain (sekolah, mitra, atau anggota organisasi).',
-        );
-      }
-      throw error;
-    }
+    return this.prisma.role.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 
   // Manage Section Endpoints
   @Get('admin/sections')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair', 'student')
   async getSections() {
     return this.prisma.section.findMany({
+      where: { deletedAt: null },
       orderBy: { sectionname: 'asc' },
     });
   }
@@ -686,16 +710,18 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async deleteSection(@Param('id') id: string) {
-    return this.prisma.section.delete({
+    return this.prisma.section.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
   }
 
   // Manage Org Member Endpoints
   @Get('admin/org-members')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair', 'student')
   async getOrgMembers() {
+    await this.autoCheckElectedPairs();
     return this.prisma.organizationMember.findMany({
       include: {
         student: {
@@ -717,8 +743,52 @@ export class AppController {
 
   @Post('admin/org-members')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
+  @Roles('superadmin', 'admin', 'president', 'principal', 'student affair', 'kepala sekolah', 'wakasek kesiswaan', 'pembina osis')
   async createOrgMember(@Body() body: any) {
+    if (body.studentid && body.periodid) {
+      const existingStudentRole = await this.prisma.organizationMember.findFirst({
+        where: { studentid: body.studentid, periodid: body.periodid }
+      });
+      if (existingStudentRole) {
+        throw new BadRequestException('Student already has a role/position in this period.');
+      }
+    }
+
+    if (body.roleid && body.periodid) {
+      const role = await this.prisma.role.findUnique({ where: { id: body.roleid } });
+      if (role) {
+        const rName = role.rolename.toLowerCase();
+        const isPres = rName === 'president' || rName.includes('president') || (rName.includes('ketua') && !rName.includes('wakil'));
+        const isVicePres = rName === 'vice president' || rName.includes('vice president') || (rName.includes('wakil') && rName.includes('ketua'));
+
+        if (isPres || isVicePres) {
+          const matchingRoles = await this.prisma.role.findMany({
+            where: {
+              OR: isPres 
+                ? [
+                    { rolename: { equals: 'president', mode: 'insensitive' } },
+                    { rolename: { contains: 'president', mode: 'insensitive' } },
+                    { rolename: { contains: 'ketua osis', mode: 'insensitive' } }
+                  ]
+                : [
+                    { rolename: { equals: 'vice president', mode: 'insensitive' } },
+                    { rolename: { contains: 'vice', mode: 'insensitive' } },
+                    { rolename: { contains: 'wakil', mode: 'insensitive' } }
+                  ]
+            }
+          });
+          const roleIds = matchingRoles.map(r => r.id);
+
+          await this.prisma.organizationMember.deleteMany({
+            where: {
+              periodid: body.periodid,
+              roleid: { in: roleIds }
+            }
+          });
+        }
+      }
+    }
+
     return this.prisma.organizationMember.create({
       data: {
         studentid: body.studentid,
@@ -731,8 +801,52 @@ export class AppController {
 
   @Put('admin/org-members/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
+  @Roles('superadmin', 'admin', 'president', 'principal', 'student affair', 'kepala sekolah', 'wakasek kesiswaan', 'pembina osis')
   async updateOrgMember(@Param('id') id: string, @Body() body: any) {
+    if (body.studentid && body.periodid) {
+      const existingStudentRole = await this.prisma.organizationMember.findFirst({
+        where: { studentid: body.studentid, periodid: body.periodid, id: { not: id } }
+      });
+      if (existingStudentRole) {
+        throw new BadRequestException('Student already has a role/position in this period.');
+      }
+    }
+    if (body.roleid && body.periodid) {
+      const role = await this.prisma.role.findUnique({ where: { id: body.roleid } });
+      if (role) {
+        const rName = role.rolename.toLowerCase();
+        const isPres = rName === 'president' || rName.includes('president') || (rName.includes('ketua') && !rName.includes('wakil'));
+        const isVicePres = rName === 'vice president' || rName.includes('vice president') || (rName.includes('wakil') && rName.includes('ketua'));
+
+        if (isPres || isVicePres) {
+          const matchingRoles = await this.prisma.role.findMany({
+            where: {
+              OR: isPres 
+                ? [
+                    { rolename: { equals: 'president', mode: 'insensitive' } },
+                    { rolename: { contains: 'president', mode: 'insensitive' } },
+                    { rolename: { contains: 'ketua osis', mode: 'insensitive' } }
+                  ]
+                : [
+                    { rolename: { equals: 'vice president', mode: 'insensitive' } },
+                    { rolename: { contains: 'vice', mode: 'insensitive' } },
+                    { rolename: { contains: 'wakil', mode: 'insensitive' } }
+                  ]
+            }
+          });
+          const roleIds = matchingRoles.map(r => r.id);
+
+          await this.prisma.organizationMember.deleteMany({
+            where: {
+              periodid: body.periodid,
+              roleid: { in: roleIds },
+              id: { not: id }
+            }
+          });
+        }
+      }
+    }
+
     return this.prisma.organizationMember.update({
       where: { id },
       data: {
@@ -746,7 +860,7 @@ export class AppController {
 
   @Delete('admin/org-members/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin')
+  @Roles('superadmin', 'admin', 'president', 'principal', 'student affair', 'kepala sekolah', 'wakasek kesiswaan', 'pembina osis')
   async deleteOrgMember(@Param('id') id: string) {
     return this.prisma.organizationMember.delete({
       where: { id }
@@ -755,7 +869,7 @@ export class AppController {
 
   @Get('admin/students')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair')
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair', 'student')
   async getStudents() {
     return this.prisma.student.findMany({
       include: {
@@ -1343,17 +1457,23 @@ export class AppController {
       selectedMonth: month,
       selectedYear: year,
       accumulatedTotal,
-      classes: classes.map((cls) => ({
-        id: cls.id,
-        classname: cls.classname,
-        grade: cls.grade.gradename,
-        major: cls.major.majorname,
-        majorCode: cls.major.majorcode,
-        studentCount: cls._count.students,
-        requiredPayment: cls._count.students * 5000,
-        isPaid: cls.kasPayments.length > 0,
-        paidAt: cls.kasPayments.length > 0 ? cls.kasPayments[0].createdAt : null,
-      })),
+      classes: classes.map((cls) => {
+        const isPaid = cls.kasPayments.length > 0;
+        const paidAmount = isPaid ? cls.kasPayments[0].amount : 0;
+        const studentCount = isPaid ? Math.round(paidAmount / 5000) : cls._count.students;
+        const requiredPayment = isPaid ? paidAmount : cls._count.students * 5000;
+        return {
+          id: cls.id,
+          classname: cls.classname,
+          grade: cls.grade.gradename,
+          major: cls.major.majorname,
+          majorCode: cls.major.majorcode,
+          studentCount,
+          requiredPayment,
+          isPaid,
+          paidAt: isPaid ? cls.kasPayments[0].createdAt : null,
+        };
+      }),
     };
   }
 
@@ -1425,6 +1545,247 @@ export class AppController {
         amount,
       },
     });
+  }
+
+  @Get('admin/activity-logs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async getActivityLogs() {
+    return this.prisma.activityLog.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: 100,
+    });
+  }
+
+  @Get('admin/recycle-bin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async getRecycleBin() {
+    const classes = await this.prisma.class.findMany({
+      where: { deletedAt: { not: null } },
+      include: { grade: true, major: true },
+      orderBy: { deletedAt: 'desc' },
+    });
+    const grades = await this.prisma.grade.findMany({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+    });
+    const majors = await this.prisma.major.findMany({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+    });
+    const usersRaw = await this.prisma.user.findMany({
+      where: { deletedAt: { not: null } },
+      include: {
+        level: true,
+        students: { include: { class: true } },
+        schools: { include: { role: true } },
+        employers: { include: { role: true } },
+      },
+      orderBy: { deletedAt: 'desc' },
+    });
+    const users = usersRaw.map(u => {
+      let email = '-';
+      let role = '-';
+      let classname = '-';
+      if (u.level.levelname === 'student' && u.students.length > 0) {
+        email = u.students[0].email;
+        classname = u.students[0].class?.classname || '-';
+        role = 'student';
+      } else if (u.level.levelname === 'school' && u.schools.length > 0) {
+        email = u.schools[0].email;
+        role = u.schools[0].role.rolename;
+      } else if (u.level.levelname === 'employer' && u.employers.length > 0) {
+        email = u.employers[0].email;
+        role = u.employers[0].role.rolename;
+      }
+      return {
+        id: u.id,
+        username: u.username,
+        level: u.level.levelname,
+        email,
+        role,
+        classname,
+        deletedAt: u.deletedAt
+      };
+    });
+    const roles = await this.prisma.role.findMany({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+    });
+    const sections = await this.prisma.section.findMany({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+    });
+    return {
+      classes,
+      grades,
+      majors,
+      users,
+      roles,
+      sections,
+    };
+  }
+
+  @Post('admin/recycle-bin/restore')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async restoreRecycleBinItem(@Body() body: { type: string; id: string }) {
+    const { type, id } = body;
+    switch (type) {
+      case 'class':
+        return this.prisma.class.update({
+          where: { id },
+          data: { deletedAt: null },
+        });
+      case 'grade':
+        return this.prisma.grade.update({
+          where: { id },
+          data: { deletedAt: null },
+        });
+      case 'major':
+        return this.prisma.major.update({
+          where: { id },
+          data: { deletedAt: null },
+        });
+      case 'user':
+        await this.prisma.student.updateMany({
+          where: { userid: id },
+          data: { deletedAt: null },
+        });
+        await this.prisma.school.updateMany({
+          where: { userid: id },
+          data: { deletedAt: null },
+        });
+        await this.prisma.employer.updateMany({
+          where: { userid: id },
+          data: { deletedAt: null },
+        });
+        return this.prisma.user.update({
+          where: { id },
+          data: { deletedAt: null },
+        });
+      case 'role':
+        return this.prisma.role.update({
+          where: { id },
+          data: { deletedAt: null },
+        });
+      case 'section':
+        return this.prisma.section.update({
+          where: { id },
+          data: { deletedAt: null },
+        });
+      default:
+        throw new BadRequestException('Tipe data tidak didukung');
+    }
+  }
+
+  @Get('admin/permissions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async getPermissions() {
+    const rolesList = [
+      'superadmin',
+      'admin',
+      'president',
+      'vice president',
+      'treasurer',
+      'secretaris',
+      'principal',
+      'viceprincipal',
+      'student affair',
+      'student'
+    ];
+
+    const menuKeys = [
+      'kandidat',
+      'proker',
+      'organization',
+      'kas',
+      'evaluasi-kinerja',
+      'activity-log',
+      'recycle-bin',
+      'vote',
+      'manage-class',
+      'manage-grade',
+      'manage-major',
+      'manage-period',
+      'manage-user',
+      'manage-role',
+      'manage-section',
+      'system-setting',
+      'backup-db'
+    ];
+
+    const existing = await this.prisma.menuPermission.findMany();
+
+    const toCreate: any[] = [];
+    for (const r of rolesList) {
+      for (const m of menuKeys) {
+        const found = existing.some(ex => ex.roleName === r && ex.menuKey === m);
+        if (!found) {
+          let allowed = false;
+          if (r === 'superadmin' || r === 'admin') {
+            allowed = true;
+          } else if (r === 'president' && ['kandidat', 'proker', 'organization', 'kas', 'evaluasi-kinerja', 'vote'].includes(m)) {
+            allowed = true;
+          } else if (r === 'student' && ['proker', 'organization', 'kas', 'vote'].includes(m)) {
+            allowed = true;
+          } else if (['vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair'].includes(r) && ['proker', 'organization', 'kas', 'evaluasi-kinerja', 'vote'].includes(m)) {
+            allowed = true;
+          }
+          toCreate.push({ roleName: r, menuKey: m, allowed });
+        }
+      }
+    }
+
+    if (toCreate.length > 0) {
+      await this.prisma.menuPermission.createMany({
+        data: toCreate
+      });
+    }
+
+    return this.prisma.menuPermission.findMany({
+      orderBy: [
+        { roleName: 'asc' },
+        { menuKey: 'asc' }
+      ]
+    });
+  }
+
+  @Post('admin/permissions/update')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin')
+  async updatePermission(@Body() body: { roleName: string; menuKey: string; allowed: boolean }) {
+    return this.prisma.menuPermission.upsert({
+      where: {
+        roleName_menuKey: {
+          roleName: body.roleName,
+          menuKey: body.menuKey
+        }
+      },
+      update: {
+        allowed: body.allowed
+      },
+      create: {
+        roleName: body.roleName,
+        menuKey: body.menuKey,
+        allowed: body.allowed
+      }
+    });
+  }
+
+  @Get('permissions/my')
+  @UseGuards(JwtAuthGuard)
+  async getMyPermissions(@Request() req: any) {
+    const user = req.user;
+    const roleName = user.role || 'student';
+    const permissions = await this.prisma.menuPermission.findMany({
+      where: { roleName },
+    });
+    return permissions.filter(p => p.allowed).map(p => p.menuKey);
   }
 }
 

@@ -269,3 +269,27 @@ model KasPayment {
   @@unique([classId, periodId, month, year])
   @@map("kas_payments")
 }
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  username  String
+  createdAt DateTime @default(now())
+  ipAddress String
+  latitude  Float?
+  longitude Float?
+  action    String
+
+  @@map("activity_logs")
+}
+
+model MenuPermission {
+  id        String   @id @default(uuid())
+  roleName  String
+  menuKey   String
+  allowed   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([roleName, menuKey])
+  @@map("menu_permissions")
+}

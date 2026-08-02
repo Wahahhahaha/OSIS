@@ -1091,9 +1091,13 @@ textarea.form-input {
   background: var(--card-bg);
   border: 2px solid var(--card-border);
   border-radius: 14px;
-  padding: 18px 24px;
-  min-width: 190px;
-  max-width: 240px;
+  padding: 14px 16px;
+  width: 210px;
+  min-width: 210px;
+  max-width: 210px;
+  height: 140px;
+  min-height: 140px;
+  max-height: 140px;
   text-align: center;
   box-shadow: var(--card-shadow);
   transition: var(--transition);
@@ -1101,7 +1105,8 @@ textarea.form-input {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  box-sizing: border-box;
 }
 
 .org-chart-node:hover {
@@ -1164,6 +1169,69 @@ textarea.form-input {
 
 .org-chart-section-card {
   border-style: dashed;
+  border-color: var(--text-muted);
+}
+
+/* Hide scrollbar globally for all elements while maintaining scroll functionality */
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+/* Premium custom checkbox styles */
+.custom-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--card-border);
+  border-radius: 6px;
+  background-color: var(--card-bg);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.custom-checkbox:hover:not(:disabled) {
+  border-color: var(--secondary-blue);
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.15);
+}
+
+.custom-checkbox:checked {
+  background-color: var(--secondary-blue);
+  border-color: var(--secondary-blue);
+}
+
+.custom-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-top: -2px;
+}
+
+.custom-checkbox:disabled {
+  background-color: var(--bg-soft-white);
+  border-color: var(--card-border);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.custom-checkbox:disabled:checked {
+  background-color: var(--text-muted);
   border-color: var(--text-muted);
 }
 
