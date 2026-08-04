@@ -13,6 +13,95 @@ export class AppController {
     private readonly prisma: PrismaService,
   ) {}
 
+  private getGradeLevelNumber(gradeName: string) {
+    const normalized = (gradeName || '').trim().toUpperCase();
+    const romanMap: Record<string, number> = {
+      VII: 7,
+      VIII: 8,
+      IX: 9,
+      X: 10,
+      XI: 11,
+      XII: 12,
+    };
+
+    if (romanMap[normalized]) {
+      return romanMap[normalized];
+    }
+
+    const match = normalized.match(/\d+/);
+    return match ? parseInt(match[0], 10) : null;
+  }
+
+  private isSmpMajor(major: { majorcode: string; majorname: string }) {
+    const majorCode = (major.majorcode || '').trim().toLowerCase();
+    const majorName = (major.majorname || '').trim().toLowerCase();
+    return majorCode === 'smp' || majorName.includes('smp');
+  }
+
+  private validateClassMajorCombination(gradeName: string, major: { majorcode: string; majorname: string }) {
+    const gradeLevel = this.getGradeLevelNumber(gradeName);
+    if (!gradeLevel) {
+      throw new BadRequestException('Grade tidak valid');
+    }
+
+    const isSmpMajor = this.isSmpMajor(major);
+    if (gradeLevel <= 9 && !isSmpMajor) {
+      throw new BadRequestException('Grade VII, VIII, dan IX hanya boleh menggunakan major SMP');
+    }
+    if (gradeLevel >= 10 && isSmpMajor) {
+      throw new BadRequestException('Grade X, XI, dan XII tidak boleh menggunakan major SMP');
+    }
+  }
+
+  private validateOrganizationMemberGrade(gradeName: string) {
+    const gradeLevel = this.getGradeLevelNumber(gradeName);
+    const allowedGrades = [7, 8, 10, 11];
+    if (!gradeLevel || !allowedGrades.includes(gradeLevel)) {
+      throw new BadRequestException('Hanya siswa grade VII, VIII, X, dan XI yang bisa dipilih sebagai anggota organisasi');
+    }
+  }
+
+  private async validateCandidateStudentGradeX(userId: string, fieldName: string) {
+    if (!userId || userId === '-') {
+      throw new BadRequestException(`${fieldName} wajib dipilih`);
+    }
+
+    const student = await this.prisma.student.findFirst({
+      where: { userid: userId },
+      include: {
+        class: {
+          include: {
+            grade: true,
+          },
+        },
+        organizationMembers: {
+          include: {
+            role: true,
+            period: true,
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      throw new BadRequestException(`${fieldName} tidak ditemukan`);
+    }
+
+    const gradeName = student?.class?.grade?.gradename || '';
+    const gradeLevel = this.getGradeLevelNumber(gradeName);
+
+    if (gradeLevel !== 10) {
+      throw new BadRequestException(`${fieldName} hanya boleh dari student grade X`);
+    }
+
+    const activeMember = student.organizationMembers.find((om) => om.period?.status?.toLowerCase() === 'active')
+      || student.organizationMembers[0];
+    const currentRole = (activeMember?.role?.rolename || 'student').trim().toLowerCase();
+    if (currentRole && currentRole !== 'student' && currentRole !== '-' && currentRole !== 'members' && currentRole !== 'member') {
+      throw new BadRequestException(`${fieldName} harus student biasa, bukan yang sedang menjabat`);
+    }
+  }
+
   @Get()
   getHello(): string {
     return this.appService.getHello();
@@ -81,6 +170,21 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async createClass(@Body() body: any) {
+    if (!body.gradeid || !body.majorid || !body.classname) {
+      throw new BadRequestException('Data kelas tidak lengkap');
+    }
+
+    const grade = await this.prisma.grade.findUnique({ where: { id: body.gradeid } });
+    const major = await this.prisma.major.findUnique({ where: { id: body.majorid } });
+    if (!grade) {
+      throw new BadRequestException('Grade tidak ditemukan');
+    }
+    if (!major) {
+      throw new BadRequestException('Major tidak ditemukan');
+    }
+
+    this.validateClassMajorCombination(grade.gradename, major);
+
     return this.prisma.class.create({
       data: {
         classname: body.classname,
@@ -201,7 +305,7 @@ export class AppController {
         const s = u.students[0];
         email = s.email;
         const activeMember = s.organizationMembers.find(om => om.period.status.toLowerCase() === 'active')
-          || s.organizationMembers[0];
+          || null;
         role = (activeMember?.role?.rolename || 'student').toLowerCase();
         classname = s.class?.classname || '-';
         classid = s.classid || '';
@@ -746,6 +850,15 @@ export class AppController {
   @Roles('superadmin', 'admin', 'president', 'principal', 'student affair', 'kepala sekolah', 'wakasek kesiswaan', 'pembina osis')
   async createOrgMember(@Body() body: any) {
     if (body.studentid && body.periodid) {
+      const student = await this.prisma.student.findUnique({
+        where: { id: body.studentid },
+        include: { class: { include: { grade: true } } }
+      });
+      if (!student) {
+        throw new BadRequestException('Student tidak ditemukan');
+      }
+      this.validateOrganizationMemberGrade(student.class?.grade?.gradename || '');
+
       const existingStudentRole = await this.prisma.organizationMember.findFirst({
         where: { studentid: body.studentid, periodid: body.periodid }
       });
@@ -804,6 +917,15 @@ export class AppController {
   @Roles('superadmin', 'admin', 'president', 'principal', 'student affair', 'kepala sekolah', 'wakasek kesiswaan', 'pembina osis')
   async updateOrgMember(@Param('id') id: string, @Body() body: any) {
     if (body.studentid && body.periodid) {
+      const student = await this.prisma.student.findUnique({
+        where: { id: body.studentid },
+        include: { class: { include: { grade: true } } }
+      });
+      if (!student) {
+        throw new BadRequestException('Student tidak ditemukan');
+      }
+      this.validateOrganizationMemberGrade(student.class?.grade?.gradename || '');
+
       const existingStudentRole = await this.prisma.organizationMember.findFirst({
         where: { studentid: body.studentid, periodid: body.periodid, id: { not: id } }
       });
@@ -873,7 +995,12 @@ export class AppController {
   async getStudents() {
     return this.prisma.student.findMany({
       include: {
-        class: true,
+        class: {
+          include: {
+            grade: true,
+            major: true
+          }
+        },
         user: true
       },
       orderBy: { user: { username: 'asc' } }
@@ -931,12 +1058,31 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async updateClass(@Param('id') id: string, @Body() body: any) {
+    const existing = await this.prisma.class.findUnique({ where: { id } });
+    if (!existing) {
+      throw new BadRequestException('Class tidak ditemukan');
+    }
+
+    const gradeId = body.gradeid || existing.gradeid;
+    const majorId = body.majorid || existing.majorid;
+    const grade = await this.prisma.grade.findUnique({ where: { id: gradeId } });
+    const major = await this.prisma.major.findUnique({ where: { id: majorId } });
+
+    if (!grade) {
+      throw new BadRequestException('Grade tidak ditemukan');
+    }
+    if (!major) {
+      throw new BadRequestException('Major tidak ditemukan');
+    }
+
+    this.validateClassMajorCombination(grade.gradename, major);
+
     return this.prisma.class.update({
       where: { id },
       data: {
         classname: body.classname,
-        gradeid: body.gradeid,
-        majorid: body.majorid,
+        gradeid: gradeId,
+        majorid: majorId,
       },
     });
   }
@@ -1056,6 +1202,9 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async createCandidate(@Body() body: any) {
+    await this.validateCandidateStudentGradeX(body.presidentId, 'Calon Ketua OSIS');
+    await this.validateCandidateStudentGradeX(body.vicePresidentId, 'Calon Wakil Ketua OSIS');
+
     return this.prisma.candidate.create({
       data: {
         paslonNo: body.paslonNo,
@@ -1079,6 +1228,9 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async updateCandidate(@Param('id') id: string, @Body() body: any) {
+    await this.validateCandidateStudentGradeX(body.presidentId, 'Calon Ketua OSIS');
+    await this.validateCandidateStudentGradeX(body.vicePresidentId, 'Calon Wakil Ketua OSIS');
+
     return this.prisma.candidate.update({
       where: { id },
       data: {
@@ -1686,7 +1838,7 @@ export class AppController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
   async getPermissions() {
-    const rolesList = [
+    const baseRoles = [
       'superadmin',
       'admin',
       'president',
@@ -1696,8 +1848,27 @@ export class AppController {
       'principal',
       'viceprincipal',
       'student affair',
-      'student'
+      'student',
+      'member',
+      'members'
     ];
+
+    const dbRoles = await this.prisma.role.findMany({
+      select: { rolename: true },
+      orderBy: { rolename: 'asc' },
+    });
+
+    const roleMap = new Map<string, string>();
+    for (const roleName of [...baseRoles, ...dbRoles.map(r => r.rolename)]) {
+      const normalized = (roleName || '').trim();
+      if (!normalized) continue;
+      const key = normalized.toLowerCase();
+      if (!roleMap.has(key)) {
+        roleMap.set(key, normalized);
+      }
+    }
+
+    const rolesList = Array.from(roleMap.values());
 
     const menuKeys = [
       'kandidat',
@@ -1721,22 +1892,38 @@ export class AppController {
 
     const existing = await this.prisma.menuPermission.findMany();
 
+    const hasDefaultPermission = (roleName: string, menuKey: string) => {
+      const r = roleName.trim().toLowerCase();
+      const m = menuKey.trim().toLowerCase();
+
+      if (r === 'superadmin' || r === 'admin') {
+        return true;
+      }
+
+      const officerMenus = ['proker', 'organization', 'kas', 'evaluasi-kinerja', 'vote'];
+      const studentMenus = ['proker', 'organization', 'kas', 'vote'];
+
+      const isPresident = r === 'president' || r.includes('president') || r.includes('ketua');
+      const isVicePresident = r === 'vice president' || (r.includes('vice') && r.includes('president')) || (r.includes('wakil') && r.includes('ketua'));
+      const isTreasurer = r === 'treasurer' || r.includes('treasurer') || r.includes('bendahara');
+      const isSecretary = r === 'secretaris' || r.includes('secretary') || r.includes('sekretaris');
+      const isPrincipal = r === 'principal' || r.includes('principal') || r.includes('kepala sekolah');
+      const isVicePrincipal = r === 'viceprincipal' || r.includes('vice principal') || r.includes('wakasek') || (r.includes('wakil') && r.includes('kepala'));
+      const isStudentAffair = r === 'student affair' || r.includes('student affair') || r.includes('kesiswaan') || r.includes('pembina osis');
+      const isStudentLike = r === 'student' || r === 'member' || r === 'members' || r.includes('student') || r.includes('member');
+
+      if (isPresident && ['kandidat', ...officerMenus].includes(m)) return true;
+      if ((isVicePresident || isTreasurer || isSecretary || isPrincipal || isVicePrincipal || isStudentAffair) && officerMenus.includes(m)) return true;
+      if (isStudentLike && studentMenus.includes(m)) return true;
+      return false;
+    };
+
     const toCreate: any[] = [];
     for (const r of rolesList) {
       for (const m of menuKeys) {
-        const found = existing.some(ex => ex.roleName === r && ex.menuKey === m);
+        const found = existing.some(ex => (ex.roleName || '').trim().toLowerCase() === r.trim().toLowerCase() && ex.menuKey === m);
         if (!found) {
-          let allowed = false;
-          if (r === 'superadmin' || r === 'admin') {
-            allowed = true;
-          } else if (r === 'president' && ['kandidat', 'proker', 'organization', 'kas', 'evaluasi-kinerja', 'vote'].includes(m)) {
-            allowed = true;
-          } else if (r === 'student' && ['proker', 'organization', 'kas', 'vote'].includes(m)) {
-            allowed = true;
-          } else if (['vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair'].includes(r) && ['proker', 'organization', 'kas', 'evaluasi-kinerja', 'vote'].includes(m)) {
-            allowed = true;
-          }
-          toCreate.push({ roleName: r, menuKey: m, allowed });
+          toCreate.push({ roleName: r, menuKey: m, allowed: hasDefaultPermission(r, m) });
         }
       }
     }
@@ -1781,11 +1968,78 @@ export class AppController {
   @UseGuards(JwtAuthGuard)
   async getMyPermissions(@Request() req: any) {
     const user = req.user;
-    const roleName = user.role || 'student';
-    const permissions = await this.prisma.menuPermission.findMany({
-      where: { roleName },
-    });
-    return permissions.filter(p => p.allowed).map(p => p.menuKey);
+    const normalizeRoleName = (roleName: string) => {
+      const r = (roleName || '').trim().toLowerCase();
+      if (!r) return 'student';
+
+      if (r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris 1' || r === 'sekretaris 2') {
+        return 'secretaris';
+      }
+
+      if (r === 'treasurer 1' || r === 'treasurer 2' || r === 'bendahara 1' || r === 'bendahara 2') {
+        return 'treasurer';
+      }
+
+      if (r === 'vice principal' || r === 'vice principal 1' || r === 'vice principal 2' || r === 'wakil kepala sekolah') {
+        return 'viceprincipal';
+      }
+
+      if (r === 'student affair' || r === 'student affairs' || r === 'wakasek kesiswaan' || r === 'pembina osis') {
+        return 'student affair';
+      }
+
+      if (r === 'member' || r === 'members') {
+        return 'student';
+      }
+
+      return r;
+    };
+
+    const getRoleAliases = (roleName: string) => {
+      const normalized = normalizeRoleName(roleName);
+      const aliases = new Set<string>([normalized]);
+
+      if (normalized === 'secretaris') {
+        aliases.add('secretary 1');
+        aliases.add('secretary 2');
+        aliases.add('sekretaris 1');
+        aliases.add('sekretaris 2');
+      }
+
+      if (normalized === 'treasurer') {
+        aliases.add('treasurer 1');
+        aliases.add('treasurer 2');
+        aliases.add('bendahara 1');
+        aliases.add('bendahara 2');
+      }
+
+      if (normalized === 'viceprincipal') {
+        aliases.add('vice principal');
+        aliases.add('vice principal 1');
+        aliases.add('vice principal 2');
+        aliases.add('wakil kepala sekolah');
+      }
+
+      if (normalized === 'student affair') {
+        aliases.add('student affairs');
+        aliases.add('wakasek kesiswaan');
+        aliases.add('pembina osis');
+      }
+
+      if (normalized === 'student') {
+        aliases.add('member');
+        aliases.add('members');
+      }
+
+      return Array.from(aliases);
+    };
+
+    const roleName = normalizeRoleName(user.role || 'student');
+    const roleAliases = getRoleAliases(roleName);
+    const permissions = await this.prisma.menuPermission.findMany();
+    return permissions
+      .filter(p => roleAliases.includes((p.roleName || '').trim().toLowerCase()) && p.allowed)
+      .map(p => p.menuKey);
   }
 }
 

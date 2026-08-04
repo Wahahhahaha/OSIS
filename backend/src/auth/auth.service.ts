@@ -14,6 +14,33 @@ export class AuthService {
     private prisma: PrismaService,
   ) {}
 
+  private normalizeRoleName(roleName: string) {
+    const r = (roleName || '').trim().toLowerCase();
+    if (!r) return 'student';
+
+    if (r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris 1' || r === 'sekretaris 2') {
+      return 'secretaris';
+    }
+
+    if (r === 'treasurer 1' || r === 'treasurer 2' || r === 'bendahara 1' || r === 'bendahara 2') {
+      return 'treasurer';
+    }
+
+    if (r === 'vice principal' || r === 'vice principal 1' || r === 'vice principal 2' || r === 'wakil kepala sekolah') {
+      return 'viceprincipal';
+    }
+
+    if (r === 'student affair' || r === 'student affairs' || r === 'wakasek kesiswaan' || r === 'pembina osis') {
+      return 'student affair';
+    }
+
+    if (r === 'member' || r === 'members') {
+      return 'student';
+    }
+
+    return r;
+  }
+
   async register(dto: RegisterDto) {
     const existingUser = await this.usersService.findByUsername(dto.username);
     if (existingUser) {
@@ -120,7 +147,7 @@ export class AuthService {
       const activeMember = s.organizationMembers.find(om => om.period.status.toLowerCase() === 'active') 
         || s.organizationMembers[0];
 
-      roleName = (activeMember?.role?.rolename || 'student').toLowerCase();
+      roleName = this.normalizeRoleName(activeMember?.role?.rolename || 'student');
       const sectionName = activeMember?.section?.sectionname || null;
 
       details = {
@@ -132,11 +159,11 @@ export class AuthService {
     } else if (user.level.levelname === 'school' && user.schools.length > 0) {
       const sc = user.schools[0];
       email = sc.email;
-      roleName = sc.role.rolename.toLowerCase();
+      roleName = this.normalizeRoleName(sc.role.rolename);
     } else if (user.level.levelname === 'employer' && user.employers.length > 0) {
       const emp = user.employers[0];
       email = emp.email;
-      roleName = emp.role.rolename.toLowerCase();
+      roleName = this.normalizeRoleName(emp.role.rolename);
     }
 
     return {

@@ -218,6 +218,7 @@ const Dashboard = () => {
   const [newRolename, setNewRolename] = useState('');
   const [newSectionname, setNewSectionname] = useState('');
   const [adminSearch, setAdminSearch] = useState('');
+  const [activityLogRoleFilter, setActivityLogRoleFilter] = useState('all');
   const [evalSearch, setEvalSearch] = useState('');
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [activityLogsLoading, setActivityLogsLoading] = useState<boolean>(false);
@@ -466,6 +467,62 @@ const Dashboard = () => {
     return set;
   }, [candidates, newCandidatePeriodId, editingItem]);
 
+  const formatCandidateStudentOptionLabel = (student: any) => {
+    const studentName = student.username || student.user?.username || student.user?.name || student.user?.fullName || student.name || '-';
+    const classId = student.classid || student.classId;
+    const studentClass = classes.find((c: any) => c.id === classId) || student.class || student.Class || {};
+    const majorCode = studentClass.major?.majorcode || studentClass.majorcode || studentClass.majorCode;
+    const gradeName = studentClass.grade?.gradename || studentClass.gradename || studentClass.gradeName;
+    const className = studentClass.classname || studentClass.className;
+    return [studentName, majorCode, gradeName, className].filter(Boolean).join(' ');
+  };
+
+  const getCandidateStudentGradeLevel = (student: any) => {
+    const classId = student.classid || student.classId;
+    const studentClass = classes.find((c: any) => c.id === classId) || student.class || student.Class || {};
+    const gradeName = studentClass.grade?.gradename || studentClass.gradename || studentClass.gradeName || '';
+    const normalized = gradeName.trim().toUpperCase();
+    const romanMap: Record<string, number> = {
+      VII: 7,
+      VIII: 8,
+      IX: 9,
+      X: 10,
+      XI: 11,
+      XII: 12,
+    };
+
+    if (romanMap[normalized]) {
+      return romanMap[normalized];
+    }
+
+    const match = normalized.match(/\d+/);
+    return match ? parseInt(match[0], 10) : null;
+  };
+
+  const isPureStudentCandidate = (student: any) => {
+    const role = (student.role || '').trim().toLowerCase();
+    return role === '' || role === '-' || role === 'student';
+  };
+
+  const candidateStudentOptions = useMemo(() => {
+    return users.filter(u => {
+      if (u.level !== 'student') return false;
+      if (!isPureStudentCandidate(u)) return false;
+      if (existingCandidateUserIds.has(u.id)) return false;
+      return getCandidateStudentGradeLevel(u) === 10;
+    });
+  }, [users, classes, existingCandidateUserIds]);
+
+  const viceCandidateStudentOptions = useMemo(() => {
+    return users.filter(u => {
+      if (u.level !== 'student') return false;
+      if (!isPureStudentCandidate(u)) return false;
+      if (u.id === selectedPresidentId) return false;
+      if (existingCandidateUserIds.has(u.id)) return false;
+      return getCandidateStudentGradeLevel(u) === 10;
+    });
+  }, [users, classes, existingCandidateUserIds, selectedPresidentId]);
+
   // Auto-generate candidate name and classes based on selected president/vice president
   useEffect(() => {
     const studentUsers = users.filter(u => u.level === 'student');
@@ -614,19 +671,35 @@ const Dashboard = () => {
       }
     }
 
+    if (activeMenu === 'kandidat') {
+      loadPeriodsData();
+      loadCandidatesData();
+      loadUsersData();
+      loadClassesData();
+    }
+
     // Loaded for all roles
     if (activeMenu === 'organization') {
       loadOrgMembersData();
       loadStudentsData();
+      loadClassesData();
       loadUsersData();
       loadRolesData();
       loadPeriodsData();
       loadSectionsData();
     }
+    if (activeMenu === 'kandidat') {
+      loadPeriodsData();
+      loadCandidatesData();
+      loadUsersData();
+      loadClassesData();
+    }
     if (activeMenu === 'proker' || activeMenu === 'proker-detail') {
       loadProkersData();
       loadPeriodsData();
       loadCandidatesData();
+      loadOrgMembersData();
+      loadClassesData();
     }
     if (activeMenu === 'vote') {
       loadPeriodsData();
@@ -638,6 +711,7 @@ const Dashboard = () => {
     }
     if (activeMenu === 'activity-log') {
       loadActivityLogsData();
+      loadUsersData();
     }
     if (activeMenu === 'recycle-bin') {
       loadRecycleBinData();
@@ -974,7 +1048,7 @@ const Dashboard = () => {
     try {
       await authApi.updatePermission(roleName, menuKey, !currentAllowed);
       await loadAllPermissions();
-      if (userData && userData.role === roleName) {
+      if (userData && normalizeRoleForAccess(userData.role || '') === normalizeRoleForAccess(roleName)) {
         await loadMyPermissions();
       }
     } catch (e) {
@@ -1043,6 +1117,9 @@ const Dashboard = () => {
         majorid: selectedMajorId,
       });
       setNewClassname('');
+      setSelectedGradeId('');
+      setSelectedMajorId('');
+      setActiveModal(null);
       loadClassesData();
       showToast('Kelas berhasil ditambahkan!');
     } catch (e) {
@@ -1054,6 +1131,8 @@ const Dashboard = () => {
     if (!window.confirm('Yakin ingin menghapus kelas ini?')) return;
     try {
       await authApi.deleteClass(id);
+      setEditingItem(null);
+      setActiveModal(null);
       loadClassesData();
       showToast('Kelas berhasil dihapus!');
     } catch (e) {
@@ -1068,6 +1147,7 @@ const Dashboard = () => {
     try {
       await authApi.createGrade({ gradename: newGradename });
       setNewGradename('');
+      setActiveModal(null);
       loadGradesData();
       showToast('Tingkatan kelas (Grade) berhasil ditambahkan!');
     } catch (e) {
@@ -1079,6 +1159,8 @@ const Dashboard = () => {
     if (!window.confirm('Yakin ingin menghapus grade ini?')) return;
     try {
       await authApi.deleteGrade(id);
+      setEditingItem(null);
+      setActiveModal(null);
       loadGradesData();
       showToast('Tingkatan kelas (Grade) berhasil dihapus!');
     } catch (e) {
@@ -1097,6 +1179,7 @@ const Dashboard = () => {
       });
       setNewMajorname('');
       setNewMajorcode('');
+      setActiveModal(null);
       loadMajorsData();
       showToast('Jurusan berhasil ditambahkan!');
     } catch (e) {
@@ -1108,6 +1191,8 @@ const Dashboard = () => {
     if (!window.confirm('Yakin ingin menghapus jurusan ini?')) return;
     try {
       await authApi.deleteMajor(id);
+      setEditingItem(null);
+      setActiveModal(null);
       loadMajorsData();
       showToast('Jurusan berhasil dihapus!');
     } catch (e) {
@@ -1122,6 +1207,7 @@ const Dashboard = () => {
     try {
       await authApi.createRole({ rolename: newRolename });
       setNewRolename('');
+      setActiveModal(null);
       loadRolesData();
       showToast('Peran (Role) berhasil ditambahkan!');
     } catch (e) {
@@ -1134,6 +1220,8 @@ const Dashboard = () => {
     if (!window.confirm('Yakin ingin menghapus peran (Role) ini?')) return;
     try {
       await authApi.deleteRole(id);
+      setEditingItem(null);
+      setActiveModal(null);
       loadRolesData();
       showToast('Peran (Role) berhasil dihapus!');
     } catch (e: any) {
@@ -1149,6 +1237,7 @@ const Dashboard = () => {
     try {
       await authApi.createSection({ sectionname: newSectionname });
       setNewSectionname('');
+      setActiveModal(null);
       loadSectionsData();
       showToast('Sekbid (Section) berhasil ditambahkan!');
     } catch (e) {
@@ -1161,6 +1250,8 @@ const Dashboard = () => {
     if (!window.confirm('Yakin ingin menghapus sekbid (Section) ini?')) return;
     try {
       await authApi.deleteSection(id);
+      setEditingItem(null);
+      setActiveModal(null);
       loadSectionsData();
       showToast('Sekbid (Section) berhasil dihapus!');
     } catch (e) {
@@ -1799,40 +1890,166 @@ const Dashboard = () => {
     }
   };
 
+  const normalizeRoleForAccess = (roleName: string) => {
+    const r = (roleName || '').trim().toLowerCase();
+    if (!r) return 'student';
+    if (r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris 1' || r === 'sekretaris 2') return 'secretaris';
+    if (r === 'treasurer 1' || r === 'treasurer 2' || r === 'bendahara 1' || r === 'bendahara 2') return 'treasurer';
+    if (r === 'vice principal' || r === 'vice principal 1' || r === 'vice principal 2' || r === 'wakil kepala sekolah') return 'viceprincipal';
+    if (r === 'student affair' || r === 'student affairs' || r === 'wakasek kesiswaan' || r === 'pembina osis') return 'student affair';
+    if (r === 'member' || r === 'members') return 'student';
+    return r;
+  };
+
+  const getDefaultPermissionsForRole = (roleName: string) => {
+    const role = normalizeRoleForAccess(roleName);
+    if (role === 'superadmin' || role === 'admin') {
+      return [
+        'kandidat',
+        'proker',
+        'organization',
+        'kas',
+        'evaluasi-kinerja',
+        'activity-log',
+        'recycle-bin',
+        'vote',
+        'manage-class',
+        'manage-grade',
+        'manage-major',
+        'manage-period',
+        'manage-user',
+        'manage-role',
+        'manage-section',
+        'system-setting',
+        'backup-db'
+      ];
+    }
+
+    const officerMenus = ['proker', 'organization', 'kas', 'evaluasi-kinerja', 'vote'];
+    if (role === 'president') return ['kandidat', ...officerMenus];
+    if (role === 'student') return ['proker', 'organization', 'kas', 'vote'];
+    if (['vice president', 'treasurer', 'secretaris', 'principal', 'viceprincipal', 'student affair'].includes(role)) return officerMenus;
+    return [];
+  };
+
+  const normalizedUserRole = normalizeRoleForAccess(userData?.role || '');
+  const effectivePermissions = myPermissions.length > 0 ? myPermissions : getDefaultPermissionsForRole(normalizedUserRole);
+  const getGradeLevelNumber = (gradeName: string) => {
+    const normalized = (gradeName || '').trim().toUpperCase();
+    const romanMap: Record<string, number> = {
+      VII: 7,
+      VIII: 8,
+      IX: 9,
+      X: 10,
+      XI: 11,
+      XII: 12,
+    };
+
+    if (romanMap[normalized]) {
+      return romanMap[normalized];
+    }
+
+    const match = normalized.match(/\d+/);
+    return match ? parseInt(match[0], 10) : null;
+  };
+
+  const getFilteredMajorsByGrade = (gradeId: string) => {
+    const selectedGrade = grades.find((g: any) => g.id === gradeId);
+    const gradeLevel = getGradeLevelNumber(selectedGrade?.gradename || '');
+    if (!gradeLevel) return majors;
+
+    if (gradeLevel <= 9) {
+      return majors.filter((m: any) => {
+        const majorCode = (m.majorcode || '').trim().toLowerCase();
+        const majorName = (m.majorname || '').trim().toLowerCase();
+        return majorCode === 'smp' || majorName.includes('smp');
+      });
+    }
+
+    return majors.filter((m: any) => {
+      const majorCode = (m.majorcode || '').trim().toLowerCase();
+      const majorName = (m.majorname || '').trim().toLowerCase();
+      return majorCode !== 'smp' && !majorName.includes('smp');
+    });
+  };
+
+  const filteredClassMajors = getFilteredMajorsByGrade(selectedGradeId);
+
   const renderActiveView = () => {
     switch (activeMenu) {
       case 'permissions': {
-        const rolesList = [
+        const formatPermissionRoleLabel = (roleKey: string) => {
+          const normalized = roleKey.trim().toLowerCase();
+          const roleLabelMap: Record<string, string> = {
+            superadmin: 'Super Admin',
+            admin: 'Admin',
+            president: 'President',
+            'vice president': 'Vice President',
+            treasurer: 'Treasurer',
+            secretaris: 'Secretary',
+            secretary: 'Secretary',
+            principal: 'Principal',
+            viceprincipal: 'Vice Principal',
+            'student affair': 'Student Affairs',
+            student: 'Student',
+            member: 'Member',
+            members: 'Members',
+          };
+
+          if (roleLabelMap[normalized]) {
+            return roleLabelMap[normalized];
+          }
+
+          return roleKey
+            .split(/\s+/)
+            .filter(Boolean)
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ');
+        };
+
+        const canonicalRoles = [
           { key: 'superadmin', label: 'Super Admin' },
           { key: 'admin', label: 'Admin' },
-          { key: 'president', label: 'Ketua OSIS' },
-          { key: 'vice president', label: 'Wakil Ketua' },
-          { key: 'treasurer', label: 'Bendahara' },
-          { key: 'secretaris', label: 'Sekretaris' },
-          { key: 'student affair', label: 'Pembina OSIS' },
-          { key: 'principal', label: 'Kepala Sekolah' },
-          { key: 'viceprincipal', label: 'Wakil Kepsek' },
-          { key: 'student', label: 'Siswa Biasa' }
+          { key: 'president', label: 'President' },
+          { key: 'vice president', label: 'Vice President' },
+          { key: 'treasurer', label: 'Treasurer' },
+          { key: 'secretaris', label: 'Secretary' },
+          { key: 'student affair', label: 'Student Affairs' },
+          { key: 'principal', label: 'Principal' },
+          { key: 'viceprincipal', label: 'Vice Principal' },
+          { key: 'student', label: 'Student' },
+        ];
+
+        const rolesList = [
+          ...canonicalRoles,
+          ...roles
+            .map((r: any) => (r.rolename || '').trim())
+            .filter((roleName: string) => roleName && !canonicalRoles.some(role => role.key === roleName))
+            .sort((a: string, b: string) => a.localeCompare(b))
+            .map((roleName: string) => ({
+              key: roleName,
+              label: formatPermissionRoleLabel(roleName),
+            }))
         ];
 
         const menuKeysList = [
-          { key: 'kandidat', label: 'Kandidat OSIS' },
-          { key: 'proker', label: 'Program Kerja' },
-          { key: 'organization', label: 'Struktur Organisasi' },
-          { key: 'kas', label: 'Kas OSIS' },
-          { key: 'evaluasi-kinerja', label: 'Evaluasi Kinerja' },
+          { key: 'kandidat', label: 'Candidates' },
+          { key: 'proker', label: 'Work Program' },
+          { key: 'organization', label: 'Organization Structure' },
+          { key: 'kas', label: 'OSIS Cash' },
+          { key: 'evaluasi-kinerja', label: 'Performance Evaluation' },
           { key: 'activity-log', label: 'Activity Log' },
           { key: 'recycle-bin', label: 'Recycle Bin' },
-          { key: 'vote', label: 'Melakukan Voting (E-Voting)' },
-          { key: 'manage-class', label: 'Kelola Kelas' },
-          { key: 'manage-grade', label: 'Kelola Tingkat' },
-          { key: 'manage-major', label: 'Kelola Jurusan' },
-          { key: 'manage-period', label: 'Kelola Periode' },
-          { key: 'manage-user', label: 'Kelola Akun / User' },
-          { key: 'manage-role', label: 'Kelola Peran (Role)' },
-          { key: 'manage-section', label: 'Kelola Divisi (Section)' },
-          { key: 'system-setting', label: 'Pengaturan Sistem' },
-          { key: 'backup-db', label: 'Backup Database' }
+          { key: 'vote', label: 'Voting (E-Voting)' },
+          { key: 'manage-class', label: 'Manage Class' },
+          { key: 'manage-grade', label: 'Manage Grade' },
+          { key: 'manage-major', label: 'Manage Major' },
+          { key: 'manage-period', label: 'Manage Period' },
+          { key: 'manage-user', label: 'Manage User' },
+          { key: 'manage-role', label: 'Manage Role' },
+          { key: 'manage-section', label: 'Manage Section' },
+          { key: 'system-setting', label: 'System Settings' },
+          { key: 'backup-db', label: 'Database Backup' }
         ];
 
         return (
@@ -1840,10 +2057,10 @@ const Dashboard = () => {
             <div>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <CheckSquare size={20} color="var(--secondary-blue)" />
-                Pengaturan Hak Akses (Permissions)
+                Access Permissions
               </h2>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0', textAlign: 'left' }}>
-                Centang kotak untuk memberikan hak akses menu/fitur kepada level dan peran pengguna tertentu.
+                Select the checkboxes to grant menu and feature access for each role.
               </p>
             </div>
 
@@ -1851,7 +2068,7 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th style={{ minWidth: '220px' }}>Menu / Fitur Utama</th>
+                    <th style={{ minWidth: '220px' }}>Main Menu / Feature</th>
                     {rolesList.map(r => (
                       <th key={r.key} style={{ textAlign: 'center', minWidth: '110px' }}>{r.label}</th>
                     ))}
@@ -1861,7 +2078,7 @@ const Dashboard = () => {
                   {permissionsLoading ? (
                     <tr>
                       <td colSpan={rolesList.length + 1} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                        Memuat pengaturan hak akses...
+                        Loading access permissions...
                       </td>
                     </tr>
                   ) : (
@@ -1869,7 +2086,7 @@ const Dashboard = () => {
                       <tr key={menu.key}>
                         <td style={{ fontWeight: 700, color: 'var(--primary-navy)' }}>{menu.label}</td>
                         {rolesList.map(role => {
-                          const perm = allPermissions.find(p => p.roleName === role.key && p.menuKey === menu.key);
+                          const perm = allPermissions.find(p => (p.roleName || '').trim().toLowerCase() === role.key.trim().toLowerCase() && p.menuKey === menu.key);
                           const isAllowed = perm ? perm.allowed : false;
                           const isSuperAdmin = role.key === 'superadmin';
 
@@ -2146,7 +2363,7 @@ const Dashboard = () => {
         };
 
         return (
-          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', minHeight: '600px', boxSizing: 'border-box', gap: '20px' }}>
+          <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)', minHeight: '550px', boxSizing: 'border-box', gap: '20px' }}>
             <div>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Folder size={20} color="var(--secondary-blue)" />
@@ -2191,7 +2408,7 @@ const Dashboard = () => {
             </div>
 
             {/* Tab Table Content */}
-            <div className="admin-table-container">
+            <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto', paddingBottom: '16px' }}>
               {recycleBinLoading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                   Memuat data terhapus...
@@ -2206,12 +2423,38 @@ const Dashboard = () => {
 
       case 'activity-log': {
         const sortedLogs = activityLogs.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        const filteredLogs = sortedLogs.filter(log => {
+        const roleLabelMap: Record<string, string> = {
+          superadmin: 'Superadmin',
+          admin: 'Admin',
+          president: 'President',
+          'vice president': 'Vice President',
+          treasurer: 'Treasurer',
+          secretaris: 'Secretary',
+          secretary: 'Secretary',
+          principal: 'Principal',
+          viceprincipal: 'Vice Principal',
+          'student affair': 'Student Affair',
+          student: 'Student'
+        };
+        const getUserRoleByUsername = (username: string) => {
+          const user = users.find(u => (u.username || '').toLowerCase() === (username || '').toLowerCase());
+          if (!user) return '-';
+          return roleLabelMap[(user.role || '').toLowerCase()] || user.role || '-';
+        };
+        const enrichedLogs = sortedLogs.map(log => ({
+          ...log,
+          roleLabel: getUserRoleByUsername(log.username),
+        }));
+        const filteredLogs = enrichedLogs.filter(log => {
           const query = adminSearch.toLowerCase();
-          return log.username.toLowerCase().includes(query) ||
+          const matchesRole = activityLogRoleFilter === 'all' || log.roleLabel.toLowerCase() === activityLogRoleFilter;
+          const matchesSearch =
+            log.username.toLowerCase().includes(query) ||
+            log.roleLabel.toLowerCase().includes(query) ||
             log.action.toLowerCase().includes(query) ||
             log.ipAddress.toLowerCase().includes(query) ||
-            new Date(log.createdAt).toLocaleDateString('id-ID').toLowerCase().includes(query);
+            new Date(log.createdAt).toLocaleDateString('en-US').toLowerCase().includes(query);
+          return matchesRole && matchesSearch;
         });
 
         return (
@@ -2220,22 +2463,45 @@ const Dashboard = () => {
               <div>
                 <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                   <CheckSquare size={20} color="var(--secondary-blue)" />
-                  Log Aktivitas Pengguna (POST)
+                  User Activity Log (POST)
                 </h2>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                  Catatan riwayat perubahan data dan aktivitas penting di sistem OSIS.
+                  Record of important changes and user actions in the OSIS system.
                 </p>
               </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-soft-white)', border: '1px solid var(--card-border)', borderRadius: '6px', padding: '6px 12px', width: '280px' }}>
-                <Search size={14} color="var(--text-muted)" />
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '280px' }}>
+                <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="text"
-                  placeholder="Cari log berdasarkan aksi, user, IP..."
-                  style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', width: '100%', padding: 0 }}
+                  className="form-input"
+                  placeholder="Search by user, role, action, IP, or date..."
+                  style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
                 />
+              </div>
+              <div style={{ position: 'relative', width: '260px', maxWidth: '100%' }}>
+                <select
+                  className="form-input"
+                  style={{ margin: 0, height: '100%' }}
+                  value={activityLogRoleFilter}
+                  onChange={e => setActivityLogRoleFilter(e.target.value)}
+                >
+                  <option value="all">All Roles</option>
+                  <option value="superadmin">Superadmin</option>
+                  <option value="admin">Admin</option>
+                  <option value="president">President</option>
+                  <option value="vice president">Vice President</option>
+                  <option value="treasurer">Treasurer</option>
+                  <option value="secretaris">Secretary</option>
+                  <option value="principal">Principal</option>
+                  <option value="viceprincipal">Vice Principal</option>
+                  <option value="student affair">Student Affair</option>
+                  <option value="student">Student</option>
+                </select>
               </div>
             </div>
 
@@ -2243,34 +2509,35 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '180px' }}>Waktu & Tanggal</th>
+                    <th style={{ width: '180px' }}>Date & Time</th>
                     <th>User</th>
-                    <th>Alamat IP</th>
-                    <th>Koordinat (Lat, Lng)</th>
-                    <th>Tindakan / Aksi</th>
+                    <th>Role</th>
+                    <th>IP Address</th>
+                    <th>Coordinates (Lat, Lng)</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {activityLogsLoading ? (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                        Memuat data log aktivitas...
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
+                        Loading activity log data...
                       </td>
                     </tr>
                   ) : filteredLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                        Tidak ada catatan log aktivitas yang ditemukan.
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
+                        No activity logs found.
                       </td>
                     </tr>
                   ) : (
                     filteredLogs.map((log: any) => {
                       const dateObj = new Date(log.createdAt);
-                      const formattedDate = dateObj.toLocaleDateString('id-ID', {
+                      const formattedDate = dateObj.toLocaleDateString('en-US', {
                         day: 'numeric',
                         month: 'long',
                         year: 'numeric'
-                      }) + ', ' + dateObj.toLocaleTimeString('id-ID', {
+                      }) + ', ' + dateObj.toLocaleTimeString('en-US', {
                         hour: '2-digit',
                         minute: '2-digit',
                         second: '2-digit'
@@ -2284,6 +2551,11 @@ const Dashboard = () => {
                           <td>
                             <span style={{ fontSize: '12px', padding: '3px 8px', background: 'rgba(37,99,235,0.05)', color: 'var(--secondary-blue)', borderRadius: '4px', fontWeight: 700 }}>
                               {log.username}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '12px', padding: '3px 8px', background: 'rgba(16,185,129,0.08)', color: 'var(--success)', borderRadius: '4px', fontWeight: 700 }}>
+                              {log.roleLabel}
                             </span>
                           </td>
                           <td style={{ fontFamily: 'monospace', fontSize: '13px' }}>{log.ipAddress}</td>
@@ -2750,7 +3022,7 @@ const Dashboard = () => {
         );
 
       case 'vote': {
-        if (userData.role !== 'superadmin' && !myPermissions.includes('vote')) {
+        if (userData.role !== 'superadmin' && !effectivePermissions.includes('vote')) {
           return (
             <div className="theme-card profile-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', padding: '40px' }}>
               <ShieldAlert size={48} color="var(--danger)" style={{ marginBottom: '16px' }} />
@@ -3455,9 +3727,150 @@ const Dashboard = () => {
           );
         }
 
-        const canEditProkerDetails = ['superadmin', 'president', 'vice president', 'treasurer', 'secretaris'].includes(userData?.role || '');
+        const canEditProkerDetails = ['superadmin', 'president', 'vice president', 'treasurer', 'secretaris'].includes(normalizedUserRole);
+        const canModerateProkerDocs = ['superadmin', 'admin', 'principal', 'viceprincipal', 'student affair'].includes(normalizedUserRole);
         const p = selectedProkerDetail;
         const subData = prokerSubData || { proposals: [], meetings: [], divisions: [], members: [], attendances: {}, reports: [], documentations: [] };
+        const periodOrgMembers = orgMembers.filter((m: any) => m.periodid === selectedProkerPeriod?.id);
+        const prokerEligibleMembers = orgMembers.filter((m: any) => {
+          const roleName = (m.role?.rolename || '').trim().toLowerCase();
+          const allowedRoles = [
+            'member',
+            'members',
+            'president',
+            'vice president',
+            'secretaris',
+            'sekretaris',
+            'secretary',
+            'treasurer',
+            'bendahara'
+          ];
+          return m.periodid === selectedProkerPeriod?.id && allowedRoles.some(role => roleName === role || roleName.includes(role));
+        });
+
+        const parseProkerTargetDate = (targetDate: string) => {
+          const normalized = (targetDate || '').trim().toLowerCase();
+          const monthMap: Record<string, number> = {
+            januari: 0,
+            february: 1,
+            februari: 1,
+            maret: 2,
+            march: 2,
+            april: 3,
+            mei: 4,
+            may: 4,
+            juni: 5,
+            june: 5,
+            juli: 6,
+            july: 6,
+            agustus: 7,
+            august: 7,
+            september: 8,
+            oktober: 9,
+            october: 9,
+            november: 10,
+            desember: 11,
+            december: 11
+          };
+          const parts = normalized.split(/\s+/);
+          const yearPart = parts.find(part => /^\d{4}$/.test(part));
+          const monthPart = parts.find(part => monthMap[part] !== undefined);
+          if (!yearPart || !monthPart) return null;
+          return new Date(Number(yearPart), monthMap[monthPart], 1);
+        };
+
+        const getProposalScheduleInfo = (targetDate: string) => {
+          const eventDate = parseProkerTargetDate(targetDate);
+          if (!eventDate) return null;
+
+          const now = new Date();
+          const notifyStart = new Date(eventDate);
+          notifyStart.setMonth(notifyStart.getMonth() - 3);
+
+          const submitStart = new Date(eventDate);
+          submitStart.setMonth(submitStart.getMonth() - 1);
+
+          const daysToEvent = Math.ceil((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          const isInNotifyWindow = now >= notifyStart && now < submitStart;
+          const canSubmitProposal = now >= submitStart && now < eventDate;
+          const isPastEvent = now >= eventDate;
+
+          return {
+            eventDate,
+            notifyStart,
+            submitStart,
+            daysToEvent,
+            isInNotifyWindow,
+            canSubmitProposal,
+            isPastEvent
+          };
+        };
+
+        const getOrgMemberRoleLabel = (member: any) => {
+          const roleName = (member.role?.rolename || '').trim().toLowerCase();
+          if (roleName === 'president' || roleName.includes('ketua osis')) return 'President';
+          if (roleName === 'vice president' || roleName.includes('wakil ketua')) return 'Vice President';
+          if (roleName === 'secretaris' || roleName === 'sekretaris' || roleName.includes('secretary')) {
+            const list = periodOrgMembers.filter((m: any) => {
+              const rn = (m.role?.rolename || '').trim().toLowerCase();
+              return rn === 'secretaris' || rn === 'sekretaris' || rn.includes('secretary');
+            });
+            const index = list.findIndex((m: any) => m.id === member.id);
+            return `Secretary ${index >= 0 ? index + 1 : ''}`.trim();
+          }
+          if (roleName === 'treasurer' || roleName.includes('bendahara')) {
+            const list = periodOrgMembers.filter((m: any) => {
+              const rn = (m.role?.rolename || '').trim().toLowerCase();
+              return rn === 'treasurer' || rn.includes('bendahara');
+            });
+            const index = list.findIndex((m: any) => m.id === member.id);
+            return `Treasurer ${index >= 0 ? index + 1 : ''}`.trim();
+          }
+          if (roleName === 'member' || roleName === 'members') return 'Member';
+          return member.role?.rolename || 'Member';
+        };
+        const formatProkerMemberOptionLabel = (member: any) => {
+          const studentName = member.student?.user?.username || member.student?.user?.name || member.student?.user?.fullName || member.student?.name || '-';
+          const classId = member.student?.classid || member.student?.classId;
+          const studentClass = classes.find((c: any) => c.id === classId) || member.student?.class || member.student?.Class || {};
+          const majorCode = studentClass.major?.majorcode || studentClass.majorcode || studentClass.majorCode;
+          const gradeName = studentClass.grade?.gradename || studentClass.gradename || studentClass.gradeName;
+          const className = studentClass.classname || studentClass.className;
+          const roleLabel = getOrgMemberRoleLabel(member);
+          const classLabel = [majorCode, gradeName, className].filter(Boolean).join(' ');
+          return classLabel ? `${roleLabel} - ${studentName} - ${classLabel}` : `${roleLabel} - ${studentName}`;
+        };
+        const proposalScheduleInfo = getProposalScheduleInfo(p.targetDate);
+        const isSecretaryUser = normalizedUserRole === 'secretaris';
+        const getReportScheduleInfo = (targetDate: string) => {
+          const eventDate = parseProkerTargetDate(targetDate);
+          if (!eventDate) return null;
+
+          const now = new Date();
+          const reportDeadline = new Date(eventDate);
+          reportDeadline.setMonth(reportDeadline.getMonth() + 1);
+
+          const reportWindowStart = new Date(eventDate);
+          reportWindowStart.setDate(reportWindowStart.getDate() + 1);
+
+          const daysSinceEvent = Math.ceil((now.getTime() - eventDate.getTime()) / (1000 * 60 * 60 * 24));
+          const daysUntilDeadline = Math.ceil((reportDeadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          const canSubmitReport = now >= reportWindowStart && now <= reportDeadline;
+          const isPastDeadline = now > reportDeadline;
+          const isBeforeEvent = now < reportWindowStart;
+
+          return {
+            eventDate,
+            reportWindowStart,
+            reportDeadline,
+            daysSinceEvent,
+            daysUntilDeadline,
+            canSubmitReport,
+            isPastDeadline,
+            isBeforeEvent
+          };
+        };
+        const reportScheduleInfo = getReportScheduleInfo(p.targetDate);
 
         const handleFileSelection = (file: File) => {
           const fileSizeMB = file.size / (1024 * 1024);
@@ -3506,6 +3919,16 @@ const Dashboard = () => {
 
         const handleAddProposal = (e: React.FormEvent<HTMLFormElement>) => {
           e.preventDefault();
+          if (proposalScheduleInfo) {
+            if (!proposalScheduleInfo.canSubmitProposal) {
+              if (proposalScheduleInfo.isPastEvent) {
+                alert('Acara sudah lewat. Proposal untuk proker ini ditutup.');
+              } else {
+                alert('Proposal baru bisa dikirim mulai H-1 bulan sebelum acara.');
+              }
+              return;
+            }
+          }
           const fd = new FormData(e.currentTarget);
           const title = fd.get('title') as string;
           if (!title) return;
@@ -3644,15 +4067,23 @@ const Dashboard = () => {
         const handleAddMember = (e: React.FormEvent<HTMLFormElement>) => {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
-          const name = fd.get('name') as string;
+          const memberId = fd.get('memberId') as string;
           const role = fd.get('role') as string;
           const divisionId = fd.get('divisionId') as string;
-          if (!name || !role || !divisionId) return;
+          if (!memberId || !role || !divisionId) return;
+
+          const selectedMember = prokerEligibleMembers.find((m: any) => m.id === memberId);
+          if (!selectedMember) {
+            showToast('Pilih anggota organisasi yang valid terlebih dahulu.');
+            return;
+          }
 
           const newMember = {
             id: 'mem-' + Date.now(),
             divisionId,
-            name,
+            orgMemberId: selectedMember.id,
+            studentId: selectedMember.studentid,
+            name: selectedMember.student?.user?.username || selectedMember.student?.user?.fullName || selectedMember.student?.user?.name || selectedMember.student?.name || '-',
             role
           };
 
@@ -3736,6 +4167,16 @@ const Dashboard = () => {
 
         const handleAddReport = (e: React.FormEvent<HTMLFormElement>) => {
           e.preventDefault();
+          if (reportScheduleInfo) {
+            if (!reportScheduleInfo.canSubmitReport) {
+              if (reportScheduleInfo.isBeforeEvent) {
+                alert('Laporan baru bisa dikirim mulai H+1 hari setelah acara selesai.');
+              } else if (reportScheduleInfo.isPastDeadline) {
+                alert('Batas pengiriman laporan sudah lewat. Laporan ditutup setelah H+1 bulan.');
+              }
+              return;
+            }
+          }
           const fd = new FormData(e.currentTarget);
           const title = fd.get('title') as string;
           const summary = fd.get('summary') as string;
@@ -3950,6 +4391,28 @@ const Dashboard = () => {
 
                   {prokerDocType === 'proposal' ? (
                     <>
+                      {isSecretaryUser && proposalScheduleInfo && !proposalScheduleInfo.isPastEvent && proposalScheduleInfo.isInNotifyWindow && (
+                        <div style={{ padding: '16px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--warning)' }}>Notifikasi Sekretaris</span>
+                          <span>
+                            Proposal untuk <strong>{p.name}</strong> akan dibuka untuk pengajuan saat masuk H-1 bulan sebelum acara.
+                          </span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            Sisa waktu menuju acara: <strong>{proposalScheduleInfo.daysToEvent} hari</strong>. Siapkan dokumen sekarang.
+                          </span>
+                        </div>
+                      )}
+                      {isSecretaryUser && proposalScheduleInfo && proposalScheduleInfo.canSubmitProposal && (
+                        <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.07)', border: '1px solid rgba(16, 185, 129, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--success)' }}>Proposal Sudah Bisa Dikirim</span>
+                          <span>
+                            Sekarang sudah masuk periode H-1 bulan untuk <strong>{p.name}</strong>.
+                          </span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            Proposal wajib dikirim sebelum acara dimulai.
+                          </span>
+                        </div>
+                      )}
                       {canEditProkerDetails && (() => {
                         const hasActiveProposal = subData.proposals && subData.proposals.some((x: any) => x.status === 'Diajukan' || x.status === 'Disetujui');
                         if (hasActiveProposal) {
@@ -4070,7 +4533,8 @@ const Dashboard = () => {
                               <button 
                                 type="submit" 
                                 className="btn-primary-sm" 
-                                style={{ height: '38px', padding: '0 24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700 }}
+                                disabled={!!proposalScheduleInfo && !proposalScheduleInfo.canSubmitProposal}
+                                style={{ height: '38px', padding: '0 24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, opacity: proposalScheduleInfo && !proposalScheduleInfo.canSubmitProposal ? 0.6 : 1, cursor: proposalScheduleInfo && !proposalScheduleInfo.canSubmitProposal ? 'not-allowed' : 'pointer' }}
                               >
                                 <Plus size={16} /> Ajukan Proposal
                               </button>
@@ -4087,13 +4551,13 @@ const Dashboard = () => {
                               <th>Tanggal Pengajuan</th>
                               <th>Link Dokumen</th>
                               <th>Status</th>
-                              {canEditProkerDetails && <th style={{ textAlign: 'center', width: '150px' }}>Aksi</th>}
+                              {canModerateProkerDocs && <th style={{ textAlign: 'center', width: '150px' }}>Aksi</th>}
                             </tr>
                           </thead>
                           <tbody>
                             {!subData.proposals || subData.proposals.length === 0 ? (
                               <tr>
-                                <td colSpan={canEditProkerDetails ? 5 : 4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                                <td colSpan={canModerateProkerDocs ? 5 : 4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
                                   Belum ada proposal yang diajukan.
                                 </td>
                               </tr>
@@ -4135,7 +4599,7 @@ const Dashboard = () => {
                                       )}
                                     </div>
                                   </td>
-                                  {canEditProkerDetails && (
+                                  {canModerateProkerDocs && (
                                     <td style={{ textAlign: 'center' }}>
                                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                                         {x.status !== 'Disetujui' && (
@@ -4229,6 +4693,34 @@ const Dashboard = () => {
                     </>
                   ) : (
                     <>
+                      {reportScheduleInfo && !reportScheduleInfo.isBeforeEvent && !reportScheduleInfo.isPastDeadline && (
+                        <div style={{ padding: '16px', background: reportScheduleInfo.canSubmitReport ? 'rgba(16, 185, 129, 0.07)' : 'rgba(245, 158, 11, 0.08)', border: reportScheduleInfo.canSubmitReport ? '1px solid rgba(16, 185, 129, 0.22)' : '1px solid rgba(245, 158, 11, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
+                          <span style={{ fontWeight: 700, color: reportScheduleInfo.canSubmitReport ? 'var(--success)' : 'var(--warning)' }}>
+                            {reportScheduleInfo.canSubmitReport ? 'Laporan Sudah Bisa Dikirim' : 'Menunggu Waktu Laporan'}
+                          </span>
+                          <span>
+                            {reportScheduleInfo.canSubmitReport
+                              ? `Laporan untuk ${p.name} sedang dibuka dan wajib dikirim sebelum H+1 bulan.`
+                              : `Laporan untuk ${p.name} akan dibuka mulai H+1 hari setelah acara selesai.`}
+                          </span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            {reportScheduleInfo.canSubmitReport
+                              ? `Sisa waktu menuju batas akhir: ${reportScheduleInfo.daysUntilDeadline} hari.`
+                              : `Sisa waktu menuju pembukaan laporan: ${reportScheduleInfo.daysSinceEvent <= 0 ? 1 : reportScheduleInfo.daysSinceEvent} hari.`}
+                          </span>
+                        </div>
+                      )}
+                      {reportScheduleInfo && reportScheduleInfo.isPastDeadline && (
+                        <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.07)', border: '1px solid rgba(239, 68, 68, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--danger)' }}>Batas Laporan Terlewat</span>
+                          <span>
+                            Laporan untuk <strong>{p.name}</strong> sudah melewati H+1 bulan setelah acara.
+                          </span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            Pengiriman laporan ditutup otomatis setelah tenggat.
+                          </span>
+                        </div>
+                      )}
                       {canEditProkerDetails && (() => {
                         const hasActiveReport = subData.reports && subData.reports.some((x: any) => x.status === 'Diajukan' || x.status === 'Disetujui');
                         if (hasActiveReport) {
@@ -4361,7 +4853,8 @@ const Dashboard = () => {
                               <button 
                                 type="submit" 
                                 className="btn-primary-sm" 
-                                style={{ height: '38px', padding: '0 24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700 }}
+                                disabled={!!reportScheduleInfo && !reportScheduleInfo.canSubmitReport}
+                                style={{ height: '38px', padding: '0 24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, opacity: reportScheduleInfo && !reportScheduleInfo.canSubmitReport ? 0.6 : 1, cursor: reportScheduleInfo && !reportScheduleInfo.canSubmitReport ? 'not-allowed' : 'pointer' }}
                               >
                                 <Plus size={16} /> Ajukan Laporan
                               </button>
@@ -4379,13 +4872,13 @@ const Dashboard = () => {
                               <th>Tanggal Dibuat</th>
                               <th>Link Laporan</th>
                               <th>Status</th>
-                              {canEditProkerDetails && <th style={{ textAlign: 'center', width: '150px' }}>Aksi</th>}
+                              {canModerateProkerDocs && <th style={{ textAlign: 'center', width: '150px' }}>Aksi</th>}
                             </tr>
                           </thead>
                           <tbody>
                             {!subData.reports || subData.reports.length === 0 ? (
                               <tr>
-                                <td colSpan={canEditProkerDetails ? 6 : 5} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                                <td colSpan={canModerateProkerDocs ? 6 : 5} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
                                   Belum ada laporan pertanggungjawaban yang diajukan.
                                 </td>
                               </tr>
@@ -4428,7 +4921,7 @@ const Dashboard = () => {
                                       )}
                                     </div>
                                   </td>
-                                  {canEditProkerDetails && (
+                                  {canModerateProkerDocs && (
                                     <td style={{ textAlign: 'center' }}>
                                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                                         {x.status !== 'Disetujui' && (
@@ -4624,9 +5117,14 @@ const Dashboard = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   {canEditProkerDetails && (subData.divisions?.length || 0) > 0 && (
                     <form onSubmit={handleAddMember} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
-                      <div style={{ flex: 2, minWidth: '180px' }}>
+                      <div style={{ flex: 2, minWidth: '220px' }}>
                         <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Nama Anggota</label>
-                        <input name="name" required type="text" className="form-input" placeholder="Masukkan nama..." style={{ margin: 0 }} />
+                        <select name="memberId" required className="form-input" style={{ margin: 0 }}>
+                          <option value="">-- Pilih Anggota Organisasi --</option>
+                          {prokerEligibleMembers.map((m: any) => (
+                            <option key={m.id} value={m.id}>{formatProkerMemberOptionLabel(m)}</option>
+                          ))}
+                        </select>
                       </div>
                       <div style={{ flex: 1, minWidth: '140px' }}>
                         <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Jabatan</label>
@@ -4643,7 +5141,7 @@ const Dashboard = () => {
                           ))}
                         </select>
                       </div>
-                      <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }} disabled={prokerEligibleMembers.length === 0}>
                         <Plus size={16} /> Tambah Anggota
                       </button>
                     </form>
@@ -4696,6 +5194,11 @@ const Dashboard = () => {
                       </tbody>
                     </table>
                   </div>
+                  {canEditProkerDetails && (subData.divisions?.length || 0) > 0 && prokerEligibleMembers.length === 0 && (
+                    <div style={{ padding: '14px 16px', borderRadius: '8px', border: '1px dashed var(--card-border)', color: 'var(--text-muted)', fontSize: '13px', background: 'var(--bg-soft-white)' }}>
+                      Tidak ada anggota organisasi yang cocok untuk periode ini.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -5544,8 +6047,21 @@ const Dashboard = () => {
         const vicePrincipalName = vicePrincipal?.username || 'Vice Principal';
         const studentAffairName = studentAffair?.username || 'Student Affair';
 
-        const userRoleLower = (userData?.role || '').toLowerCase();
+        const userRoleLower = normalizedUserRole;
         const canEditOrg = ['superadmin', 'admin', 'president', 'principal', 'student affair', 'kepala sekolah', 'wakasek kesiswaan', 'pembina osis'].includes(userRoleLower);
+        const formatOrgStudentName = (student: any) => {
+          if (!student) return '-';
+          return student.user?.username || student.user?.name || student.user?.fullName || student.name || '-';
+        };
+        const formatOrgStudentClassLabel = (student: any) => {
+          if (!student) return '-';
+          const classId = student.classid || student.classId;
+          const studentClass = classes.find((c: any) => c.id === classId) || student.class || student.Class || {};
+          const majorCode = studentClass.major?.majorcode || studentClass.majorcode || studentClass.majorCode;
+          const gradeName = studentClass.grade?.gradename || studentClass.gradename || studentClass.gradeName;
+          const className = studentClass.classname || studentClass.className;
+          return [majorCode, gradeName, className].filter(Boolean).join(' ') || '-';
+        };
 
         const renderNodeCard = (name: string, roleName: string, subText: string, onEdit?: () => void) => {
           return (
@@ -5652,9 +6168,9 @@ const Dashboard = () => {
                   <div className="org-chart-tier">
                     {president ? (
                       renderNodeCard(
-                        president.student?.user?.username || '-',
+                        formatOrgStudentName(president.student),
                         president.role?.rolename || 'President',
-                        president.student?.class?.classname || '-',
+                        formatOrgStudentClassLabel(president.student),
                         () => {
                           setEditingItem(president);
                           setSelectedOrgStudentId(president.studentid);
@@ -5678,9 +6194,9 @@ const Dashboard = () => {
 
                     {vicePresident ? (
                       renderNodeCard(
-                        vicePresident.student?.user?.username || '-',
+                        formatOrgStudentName(vicePresident.student),
                         vicePresident.role?.rolename || 'Vice President',
-                        vicePresident.student?.class?.classname || '-',
+                        formatOrgStudentClassLabel(vicePresident.student),
                         () => {
                           setEditingItem(vicePresident);
                           setSelectedOrgStudentId(vicePresident.studentid);
@@ -5711,9 +6227,9 @@ const Dashboard = () => {
                       <div style={{ display: 'flex', gap: '16px' }}>
                         {secretary1 ? (
                           renderNodeCard(
-                            secretary1.student?.user?.username || '-',
+                            formatOrgStudentName(secretary1.student),
                             'Secretary 1',
-                            secretary1.student?.class?.classname || '-',
+                            formatOrgStudentClassLabel(secretary1.student),
                             () => {
                               setEditingItem(secretary1);
                               setSelectedOrgStudentId(secretary1.studentid);
@@ -5737,9 +6253,9 @@ const Dashboard = () => {
 
                         {secretary2 ? (
                           renderNodeCard(
-                            secretary2.student?.user?.username || '-',
+                            formatOrgStudentName(secretary2.student),
                             'Secretary 2',
-                            secretary2.student?.class?.classname || '-',
+                            formatOrgStudentClassLabel(secretary2.student),
                             () => {
                               setEditingItem(secretary2);
                               setSelectedOrgStudentId(secretary2.studentid);
@@ -5769,9 +6285,9 @@ const Dashboard = () => {
                       <div style={{ display: 'flex', gap: '16px' }}>
                         {treasurer1 ? (
                           renderNodeCard(
-                            treasurer1.student?.user?.username || '-',
+                            formatOrgStudentName(treasurer1.student),
                             'Treasurer 1',
-                            treasurer1.student?.class?.classname || '-',
+                            formatOrgStudentClassLabel(treasurer1.student),
                             () => {
                               setEditingItem(treasurer1);
                               setSelectedOrgStudentId(treasurer1.studentid);
@@ -5795,9 +6311,9 @@ const Dashboard = () => {
 
                         {treasurer2 ? (
                           renderNodeCard(
-                            treasurer2.student?.user?.username || '-',
+                            formatOrgStudentName(treasurer2.student),
                             'Treasurer 2',
-                            treasurer2.student?.class?.classname || '-',
+                            formatOrgStudentClassLabel(treasurer2.student),
                             () => {
                               setEditingItem(treasurer2);
                               setSelectedOrgStudentId(treasurer2.studentid);
@@ -5839,9 +6355,9 @@ const Dashboard = () => {
                             {grp.members.length > 0 ? (
                               grp.members.map(m => 
                                 renderNodeCard(
-                                  m.student?.user?.username || '-',
+                                  formatOrgStudentName(m.student),
                                   m.role?.rolename || 'Member',
-                                  m.student?.class?.classname || '-',
+                                  formatOrgStudentClassLabel(m.student),
                                   () => {
                                     setEditingItem(m);
                                     setSelectedOrgStudentId(m.studentid);
@@ -6281,7 +6797,7 @@ const Dashboard = () => {
         });
 
         // Determine if user can edit/check payments
-        const canEditKas = ['superadmin', 'treasurer', 'president', 'vice president'].includes(userData.role);
+        const canEditKas = ['superadmin', 'treasurer', 'president', 'vice president'].includes(normalizedUserRole);
 
         const monthNames = [
           'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -6832,43 +7348,43 @@ const Dashboard = () => {
               <Grid size={16} /> Dashboard
             </div>
 
-            {(userData.role === 'superadmin' || myPermissions.includes('kandidat')) && (
+            {(userData.role === 'superadmin' || effectivePermissions.includes('kandidat')) && (
               <div className={`sidebar-item ${activeMenu === 'kandidat' ? 'active' : ''}`} onClick={() => navigate('/candidates')}>
                 <Users size={16} /> Kandidat OSIS
               </div>
             )}
 
-            {(userData.role === 'superadmin' || myPermissions.includes('proker')) && (
+            {(userData.role === 'superadmin' || effectivePermissions.includes('proker')) && (
               <div className={`sidebar-item ${activeMenu === 'proker' ? 'active' : ''}`} onClick={() => navigate('/proker')}>
                 <Briefcase size={16} /> Program Kerja
               </div>
             )}
 
-            {(userData.role === 'superadmin' || myPermissions.includes('organization')) && (
+            {(userData.role === 'superadmin' || effectivePermissions.includes('organization')) && (
               <div className={`sidebar-item ${activeMenu === 'organization' ? 'active' : ''}`} onClick={() => navigate('/organization')}>
                 <UserIcon size={16} /> Struktur Organisasi
               </div>
             )}
 
-            {(userData.role === 'superadmin' || myPermissions.includes('kas')) && (
+            {(userData.role === 'superadmin' || effectivePermissions.includes('kas')) && (
               <div className={`sidebar-item ${activeMenu === 'kas' ? 'active' : ''}`} onClick={() => navigate('/kas')}>
                 <Coins size={16} /> Kas OSIS
               </div>
             )}
 
-            {(userData.role === 'superadmin' || myPermissions.includes('evaluasi-kinerja')) && (
+            {(userData.role === 'superadmin' || effectivePermissions.includes('evaluasi-kinerja')) && (
               <div className={`sidebar-item ${activeMenu === 'evaluasi-kinerja' ? 'active' : ''}`} onClick={() => navigate('/evaluasi-kinerja')}>
                 <TrendingUp size={16} /> Evaluasi Kinerja
               </div>
             )}
 
-            {(userData.role === 'superadmin' || myPermissions.includes('activity-log')) && (
+            {(userData.role === 'superadmin' || effectivePermissions.includes('activity-log')) && (
               <div className={`sidebar-item ${activeMenu === 'activity-log' ? 'active' : ''}`} onClick={() => navigate('/activity-log')}>
                 <CheckSquare size={16} /> Activity Log
               </div>
             )}
 
-            {(userData.role === 'superadmin' || myPermissions.includes('recycle-bin')) && (
+            {(userData.role === 'superadmin' || effectivePermissions.includes('recycle-bin')) && (
               <div className={`sidebar-item ${activeMenu === 'recycle-bin' ? 'active' : ''}`} onClick={() => navigate('/recycle-bin')}>
                 <Folder size={16} /> Recycle Bin
               </div>
@@ -6882,7 +7398,7 @@ const Dashboard = () => {
           </div>
 
           {/* Manage Data Accordion */}
-          {(userData.role === 'superadmin' || myPermissions.some(p => p.startsWith('manage-'))) && (
+          {(userData.role === 'superadmin' || effectivePermissions.some(p => p.startsWith('manage-'))) && (
             <div className="sidebar-menu-section" style={{ marginBottom: 0 }}>
               <div 
                 className="sidebar-item" 
@@ -6897,37 +7413,37 @@ const Dashboard = () => {
               </div>
               {isManageDataOpen && (
                 <div>
-                  {(userData.role === 'superadmin' || myPermissions.includes('manage-class')) && (
+                  {(userData.role === 'superadmin' || effectivePermissions.includes('manage-class')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-class' ? 'active' : ''}`} onClick={() => navigate('/manage-class')}>
                       Manage Class
                     </div>
                   )}
-                  {(userData.role === 'superadmin' || myPermissions.includes('manage-grade')) && (
+                  {(userData.role === 'superadmin' || effectivePermissions.includes('manage-grade')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-grade' ? 'active' : ''}`} onClick={() => navigate('/manage-grade')}>
                       Manage Grade
                     </div>
                   )}
-                  {(userData.role === 'superadmin' || myPermissions.includes('manage-major')) && (
+                  {(userData.role === 'superadmin' || effectivePermissions.includes('manage-major')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-major' ? 'active' : ''}`} onClick={() => navigate('/manage-major')}>
                       Manage Major
                     </div>
                   )}
-                  {(userData.role === 'superadmin' || myPermissions.includes('manage-period')) && (
+                  {(userData.role === 'superadmin' || effectivePermissions.includes('manage-period')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-period' ? 'active' : ''}`} onClick={() => navigate('/manage-period')}>
                       Manage Period
                     </div>
                   )}
-                  {(userData.role === 'superadmin' || myPermissions.includes('manage-user')) && (
+                  {(userData.role === 'superadmin' || effectivePermissions.includes('manage-user')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-user' ? 'active' : ''}`} onClick={() => navigate('/manage-user')}>
                       Manage User
                     </div>
                   )}
-                  {(userData.role === 'superadmin' || myPermissions.includes('manage-role')) && (
+                  {(userData.role === 'superadmin' || effectivePermissions.includes('manage-role')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-role' ? 'active' : ''}`} onClick={() => navigate('/manage-role')}>
                       Manage Role
                     </div>
                   )}
-                  {(userData.role === 'superadmin' || myPermissions.includes('manage-section')) && (
+                  {(userData.role === 'superadmin' || effectivePermissions.includes('manage-section')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-section' ? 'active' : ''}`} onClick={() => navigate('/manage-section')}>
                       Manage Section
                     </div>
@@ -6938,7 +7454,7 @@ const Dashboard = () => {
           )}
 
           {/* Settings Accordion */}
-          {(userData.role === 'superadmin' || myPermissions.includes('system-setting') || myPermissions.includes('backup-db')) && (
+          {(userData.role === 'superadmin' || effectivePermissions.includes('system-setting') || effectivePermissions.includes('backup-db')) && (
             <div className="sidebar-menu-section" style={{ marginBottom: 0 }}>
               <div 
                 className="sidebar-item" 
@@ -6953,12 +7469,12 @@ const Dashboard = () => {
               </div>
               {isSettingsOpen && (
                 <div>
-                  {(userData.role === 'superadmin' || myPermissions.includes('system-setting')) && (
+                  {(userData.role === 'superadmin' || effectivePermissions.includes('system-setting')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'system-setting' ? 'active' : ''}`} onClick={() => navigate('/system-setting')}>
                       System Setting
                     </div>
                   )}
-                  {(userData.role === 'superadmin' || myPermissions.includes('backup-db')) && (
+                  {(userData.role === 'superadmin' || effectivePermissions.includes('backup-db')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'backup-db' ? 'active' : ''}`} onClick={() => navigate('/backup-db')}>
                       Backup Database
                     </div>
@@ -7051,16 +7567,21 @@ const Dashboard = () => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Grade</label>
-                  <select className="form-input" style={{ paddingLeft: '16px' }} value={selectedGradeId} onChange={e => setSelectedGradeId(e.target.value)} required>
+                  <select className="form-input" style={{ paddingLeft: '16px' }} value={selectedGradeId} onChange={e => {
+                    const nextGradeId = e.target.value;
+                    setSelectedGradeId(nextGradeId);
+                    const nextMajors = getFilteredMajorsByGrade(nextGradeId);
+                    setSelectedMajorId(nextMajors.length === 1 ? nextMajors[0].id : '');
+                  }} required>
                     <option value="">Pilih Grade</option>
                     {grades.map(g => <option key={g.id} value={g.id}>{g.gradename}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Jurusan</label>
-                  <select className="form-input" style={{ paddingLeft: '16px' }} value={selectedMajorId} onChange={e => setSelectedMajorId(e.target.value)} required>
+                  <select className="form-input" style={{ paddingLeft: '16px' }} value={selectedMajorId} onChange={e => setSelectedMajorId(e.target.value)} required disabled={!selectedGradeId}>
                     <option value="">Pilih Jurusan</option>
-                    {majors.map(m => <option key={m.id} value={m.id}>{m.majorname} ({m.majorcode})</option>)}
+                    {filteredClassMajors.map(m => <option key={m.id} value={m.id}>{m.majorname} ({m.majorcode})</option>)}
                   </select>
                 </div>
                 <div className="modal-actions">
@@ -7255,16 +7776,21 @@ const Dashboard = () => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Grade</label>
-                  <select className="form-input" style={{ paddingLeft: '16px' }} value={selectedGradeId} onChange={e => setSelectedGradeId(e.target.value)} required>
+                  <select className="form-input" style={{ paddingLeft: '16px' }} value={selectedGradeId} onChange={e => {
+                    const nextGradeId = e.target.value;
+                    setSelectedGradeId(nextGradeId);
+                    const nextMajors = getFilteredMajorsByGrade(nextGradeId);
+                    setSelectedMajorId(nextMajors.length === 1 ? nextMajors[0].id : '');
+                  }} required>
                     <option value="">Pilih Grade</option>
                     {grades.map(g => <option key={g.id} value={g.id}>{g.gradename}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Jurusan</label>
-                  <select className="form-input" style={{ paddingLeft: '16px' }} value={selectedMajorId} onChange={e => setSelectedMajorId(e.target.value)} required>
+                  <select className="form-input" style={{ paddingLeft: '16px' }} value={selectedMajorId} onChange={e => setSelectedMajorId(e.target.value)} required disabled={!selectedGradeId}>
                     <option value="">Pilih Jurusan</option>
-                    {majors.map(m => <option key={m.id} value={m.id}>{m.majorname} ({m.majorcode})</option>)}
+                    {filteredClassMajors.map(m => <option key={m.id} value={m.id}>{m.majorname} ({m.majorcode})</option>)}
                   </select>
                 </div>
                 <div className="modal-actions">
@@ -7441,9 +7967,9 @@ const Dashboard = () => {
                     required
                   >
                     <option value="">Pilih Siswa (Level Student)</option>
-                    {users.filter(u => u.level === 'student' && !existingCandidateUserIds.has(u.id)).map(u => (
+                    {candidateStudentOptions.map(u => (
                       <option key={u.id} value={u.id}>
-                        {u.username} {u.classname !== '-' ? `(${u.classname})` : ''}
+                        {formatCandidateStudentOptionLabel(u)}
                       </option>
                     ))}
                   </select>
@@ -7459,13 +7985,11 @@ const Dashboard = () => {
                     required
                   >
                     <option value="">Pilih Siswa (Level Student)</option>
-                    {users
-                      .filter(u => u.level === 'student' && u.id !== selectedPresidentId && !existingCandidateUserIds.has(u.id))
-                      .map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.username} {u.classname !== '-' ? `(${u.classname})` : ''}
-                        </option>
-                      ))}
+                    {viceCandidateStudentOptions.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {formatCandidateStudentOptionLabel(u)}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-group">
@@ -7608,7 +8132,24 @@ const Dashboard = () => {
                       .filter(m => m.periodid === targetPeriodId && (!editingItem || m.id !== editingItem.id))
                       .map(m => m.studentid)
                   );
-                  const availableStudents = students.filter(s => !assignedStudentIdsInPeriod.has(s.id));
+                  const allowedOrgGrades = new Set([7, 8, 10, 11]);
+                  const availableStudents = students.filter(s => {
+                    if (assignedStudentIdsInPeriod.has(s.id)) return false;
+                    const classId = s.classid || s.classId;
+                    const studentClass = classes.find((c: any) => c.id === classId) || s.class || s.Class || {};
+                    const gradeName = studentClass.grade?.gradename || studentClass.gradename || studentClass.gradeName || '';
+                    const gradeLevel = getGradeLevelNumber(gradeName);
+                    return gradeLevel ? allowedOrgGrades.has(gradeLevel) : false;
+                  });
+                  const formatStudentOptionLabel = (student: any) => {
+                    const studentName = student.user?.username || student.user?.name || student.user?.fullName || student.name || '-';
+                    const classId = student.classid || student.classId;
+                    const studentClass = classes.find((c: any) => c.id === classId) || student.class || student.Class || {};
+                    const majorCode = studentClass.major?.majorcode || studentClass.majorcode || studentClass.majorCode;
+                    const gradeName = studentClass.grade?.gradename || studentClass.gradename || studentClass.gradeName;
+                    const className = studentClass.classname || studentClass.className;
+                    return [studentName, majorCode, gradeName, className].filter(Boolean).join(' ');
+                  };
 
                   return (
                     <div className="form-group">
@@ -7623,7 +8164,7 @@ const Dashboard = () => {
                         <option value="">Select Student</option>
                         {availableStudents.map(s => (
                           <option key={s.id} value={s.id}>
-                            {`${s.user?.username || ''} (${s.class?.grade?.gradename || ''} ${s.class?.major?.majorcode || ''} ${s.class?.classname || ''})`}
+                            {formatStudentOptionLabel(s)}
                           </option>
                         ))}
                       </select>
