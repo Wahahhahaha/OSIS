@@ -11,6 +11,47 @@ async function main() {
     return bcrypt.hash(username, salt);
   };
 
+  // Clean up and migrate old roles
+  console.log('Migrating and cleaning up old roles...');
+  const oldRoleNames = ['Secretary 1', 'Secretary 2', 'Treasurer 1', 'Treasurer 2'];
+  
+  const unifiedSecretary = await prisma.role.upsert({
+    where: { rolename: 'Secretary' },
+    update: {},
+    create: { rolename: 'Secretary' },
+  });
+  
+  const unifiedTreasurer = await prisma.role.upsert({
+    where: { rolename: 'Treasurer' },
+    update: {},
+    create: { rolename: 'Treasurer' },
+  });
+
+  for (const oldName of oldRoleNames) {
+    const oldRole = await prisma.role.findUnique({ where: { rolename: oldName } });
+    if (oldRole) {
+      const targetRole = oldName.toLowerCase().startsWith('sec') ? unifiedSecretary : unifiedTreasurer;
+      
+      await prisma.school.updateMany({
+        where: { roleid: oldRole.id },
+        data: { roleid: targetRole.id },
+      });
+
+      await prisma.employer.updateMany({
+        where: { roleid: oldRole.id },
+        data: { roleid: targetRole.id },
+      });
+
+      await prisma.organizationMember.updateMany({
+        where: { roleid: oldRole.id },
+        data: { roleid: targetRole.id },
+      });
+
+      await prisma.role.delete({ where: { id: oldRole.id } });
+      console.log(`Successfully migrated and deleted role: ${oldName}`);
+    }
+  }
+
   console.log('Seeding levels...');
   const studentLevel = await prisma.level.upsert({
     where: { levelname: 'student' },

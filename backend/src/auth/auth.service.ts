@@ -18,11 +18,11 @@ export class AuthService {
     const r = (roleName || '').trim().toLowerCase();
     if (!r) return 'student';
 
-    if (r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris 1' || r === 'sekretaris 2') {
+    if (r === 'secretary' || r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris' || r === 'sekretaris 1' || r === 'sekretaris 2') {
       return 'secretaris';
     }
 
-    if (r === 'treasurer 1' || r === 'treasurer 2' || r === 'bendahara 1' || r === 'bendahara 2') {
+    if (r === 'treasurer' || r === 'treasurer 1' || r === 'treasurer 2' || r === 'bendahara' || r === 'bendahara 1' || r === 'bendahara 2') {
       return 'treasurer';
     }
 

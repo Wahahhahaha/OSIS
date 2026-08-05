@@ -58,6 +58,19 @@ const updateFavicon = (url: string) => {
   link.href = url;
 };
 
+// Helper to format ISO date strings for HTML datetime-local inputs
+const formatForDateTimeLocal = (dtStr: string | null | undefined): string => {
+  if (!dtStr) return '';
+  try {
+    const d = new Date(dtStr);
+    if (isNaN(d.getTime())) return '';
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch (err) {
+    return '';
+  }
+};
+
 // Initialize theme from localStorage immediately to avoid visual flashing
 const initialTheme = localStorage.getItem('theme') || 'light';
 document.documentElement.setAttribute('data-theme', initialTheme);
@@ -118,10 +131,10 @@ const Dashboard = () => {
     const saved = localStorage.getItem('sidebar_settings_open');
     return saved !== null ? saved === 'true' : true;
   });
-  const [isAccountOpen, setIsAccountOpen] = useState<boolean>(() => {
-    const saved = localStorage.getItem('sidebar_account_open');
-    return saved !== null ? saved === 'true' : true;
-  });
+  // const [isAccountOpen, setIsAccountOpen] = useState<boolean>(() => {
+  //   const saved = localStorage.getItem('sidebar_account_open');
+  //   return saved !== null ? saved === 'true' : true;
+  // });
 
   const toggleManageData = () => {
     const nextVal = !isManageDataOpen;
@@ -135,11 +148,11 @@ const Dashboard = () => {
     localStorage.setItem('sidebar_settings_open', String(nextVal));
   };
 
-  const toggleAccount = () => {
-    const nextVal = !isAccountOpen;
-    setIsAccountOpen(nextVal);
-    localStorage.setItem('sidebar_account_open', String(nextVal));
-  };
+  // const _toggleAccount = () => {
+  //   const nextVal = !isAccountOpen;
+  //   setIsAccountOpen(nextVal);
+  //   localStorage.setItem('sidebar_account_open', String(nextVal));
+  // };
 
   // Edit Profile Form State
   const [editEmail, setEditEmail] = useState('');
@@ -150,6 +163,11 @@ const Dashboard = () => {
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
 
   // Dynamic Candidates State
   const [candidates, setCandidates] = useState<any[]>(() => {
@@ -257,8 +275,8 @@ const Dashboard = () => {
   const [logoDragActive, setLogoDragActive] = useState<boolean>(false);
   const [activeQrMember, setActiveQrMember] = useState<{ memberId: string; memberName: string; meetingId: string; meetingTitle: string } | null>(null);
   const [showScanner, setShowScanner] = useState<boolean>(false);
-  const [scannerResult, setScannerResult] = useState<{ memberName: string; meetingTitle: string; prokerName: string } | null>(null);
-  const [scannerError, setScannerError] = useState<string | null>(null);
+  // const [scannerResult, setScannerResult] = useState<{ memberName: string; meetingTitle: string; prokerName: string } | null>(null);
+  // const [scannerError, setScannerError] = useState<string | null>(null);
   const [prokerSubData, setProkerSubData] = useState<any>({
     proposals: [],
     meetings: [],
@@ -407,21 +425,21 @@ const Dashboard = () => {
     return candidates.find(c => c.id === electedId) || selectedProkerWinnerCandidate || null;
   }, [selectedProkerPeriod, candidates, electedPairs, selectedProkerWinnerCandidate]);
 
-  const prokerPresident = useMemo(() => {
-    if (!selectedProkerPeriod) return null;
-    return orgMembers.find(m => 
-      m.periodid === selectedProkerPeriod.id && 
-      (m.role?.rolename.toLowerCase() === 'president' || m.role?.rolename.toLowerCase() === 'ketua osis')
-    );
-  }, [selectedProkerPeriod, orgMembers]);
+  // const prokerPresident = useMemo(() => {
+  //   if (!selectedProkerPeriod) return null;
+  //   return orgMembers.find(m => 
+  //     m.periodid === selectedProkerPeriod.id && 
+  //     (m.role?.rolename.toLowerCase() === 'president' || m.role?.rolename.toLowerCase() === 'ketua osis')
+  //   );
+  // }, [selectedProkerPeriod, orgMembers]);
 
-  const prokerVicePresident = useMemo(() => {
-    if (!selectedProkerPeriod) return null;
-    return orgMembers.find(m => 
-      m.periodid === selectedProkerPeriod.id && 
-      (m.role?.rolename.toLowerCase() === 'vice president' || m.role?.rolename.toLowerCase() === 'wakil ketua osis')
-    );
-  }, [selectedProkerPeriod, orgMembers]);
+  // const prokerVicePresident = useMemo(() => {
+  //   if (!selectedProkerPeriod) return null;
+  //   return orgMembers.find(m => 
+  //     m.periodid === selectedProkerPeriod.id && 
+  //     (m.role?.rolename.toLowerCase() === 'vice president' || m.role?.rolename.toLowerCase() === 'wakil ketua osis')
+  //   );
+  // }, [selectedProkerPeriod, orgMembers]);
 
   // Add Period Form State
   const [newPeriodYear, setNewPeriodYear] = useState('');
@@ -796,21 +814,25 @@ const Dashboard = () => {
     }
   };
 
-  const handleRecordKasPayment = async (classId: string, classname: string, requiredAmount: number) => {
+  const handleRecordKasPayment = (classId: string, classname: string, requiredAmount: number) => {
     const monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
-    const confirmPay = window.confirm(`Are you sure you want to mark class ${classname} as paid for OSIS cash of IDR ${requiredAmount.toLocaleString('en-US')} for ${monthNames[kasMonth - 1]} ${kasYear}? This action cannot be undone and cash will be recorded.`);
-    if (!confirmPay) return;
-    
-    try {
-      await authApi.recordKasPayment(classId, kasMonth, kasYear);
-      loadKasData(kasMonth, kasYear);
-    } catch (err: any) {
-      console.error(err);
-      alert(err.response?.data?.message || 'Failed to record cash payment.');
-    }
+    setConfirmModal({
+      title: 'Confirm OSIS Cash Payment',
+      message: `Are you sure you want to mark class ${classname} as paid for OSIS cash of IDR ${requiredAmount.toLocaleString('en-US')} for ${monthNames[kasMonth - 1]} ${kasYear}? This action cannot be undone and cash will be recorded.`,
+      onConfirm: async () => {
+        try {
+          await authApi.recordKasPayment(classId, kasMonth, kasYear);
+          loadKasData(kasMonth, kasYear);
+          showToast('Payment recorded successfully!');
+        } catch (err: any) {
+          console.error(err);
+          showToast(err.response?.data?.message || 'Failed to record cash payment.', 'error');
+        }
+      }
+    });
   };
 
   const handlePrevMonth = () => {
@@ -1118,23 +1140,31 @@ const Dashboard = () => {
       setSelectedMajorId('');
       setActiveModal(null);
       loadClassesData();
-      showToast('Kelas berhasil ditambahkan!');
-    } catch (e) {
+      showToast('Class added successfully!');
+    } catch (e: any) {
       console.error(e);
+      const errMsg = e.response?.data?.message || 'Failed to add class.';
+      showToast(errMsg, 'error');
     }
   };
 
-  const handleDeleteClass = async (id: string) => {
-    if (!window.confirm('Yakin ingin menghapus kelas ini?')) return;
-    try {
-      await authApi.deleteClass(id);
-      setEditingItem(null);
-      setActiveModal(null);
-      loadClassesData();
-      showToast('Kelas berhasil dihapus!');
-    } catch (e) {
-      console.error(e);
-    }
+  const handleDeleteClass = (id: string) => {
+    setConfirmModal({
+      title: 'Delete Class',
+      message: 'Are you sure you want to delete this class?',
+      onConfirm: async () => {
+        try {
+          await authApi.deleteClass(id);
+          setEditingItem(null);
+          setActiveModal(null);
+          loadClassesData();
+          showToast('Class deleted successfully!');
+        } catch (e) {
+          console.error(e);
+          showToast('Failed to delete class.', 'error');
+        }
+      }
+    });
   };
 
   // Actions for Grades
@@ -1146,23 +1176,30 @@ const Dashboard = () => {
       setNewGradename('');
       setActiveModal(null);
       loadGradesData();
-      showToast('Tingkatan kelas (Grade) berhasil ditambahkan!');
+      showToast('Grade added successfully!');
     } catch (e) {
       console.error(e);
+      showToast('Failed to add grade.', 'error');
     }
   };
 
-  const handleDeleteGrade = async (id: string) => {
-    if (!window.confirm('Yakin ingin menghapus grade ini?')) return;
-    try {
-      await authApi.deleteGrade(id);
-      setEditingItem(null);
-      setActiveModal(null);
-      loadGradesData();
-      showToast('Tingkatan kelas (Grade) berhasil dihapus!');
-    } catch (e) {
-      console.error(e);
-    }
+  const handleDeleteGrade = (id: string) => {
+    setConfirmModal({
+      title: 'Delete Grade',
+      message: 'Are you sure you want to delete this grade?',
+      onConfirm: async () => {
+        try {
+          await authApi.deleteGrade(id);
+          setEditingItem(null);
+          setActiveModal(null);
+          loadGradesData();
+          showToast('Grade deleted successfully!');
+        } catch (e) {
+          console.error(e);
+          showToast('Failed to delete grade.', 'error');
+        }
+      }
+    });
   };
 
   // Actions for Majors
@@ -1178,23 +1215,30 @@ const Dashboard = () => {
       setNewMajorcode('');
       setActiveModal(null);
       loadMajorsData();
-      showToast('Jurusan berhasil ditambahkan!');
+      showToast('Major added successfully!');
     } catch (e) {
       console.error(e);
+      showToast('Failed to add major.', 'error');
     }
   };
 
-  const handleDeleteMajor = async (id: string) => {
-    if (!window.confirm('Yakin ingin menghapus jurusan ini?')) return;
-    try {
-      await authApi.deleteMajor(id);
-      setEditingItem(null);
-      setActiveModal(null);
-      loadMajorsData();
-      showToast('Jurusan berhasil dihapus!');
-    } catch (e) {
-      console.error(e);
-    }
+  const handleDeleteMajor = (id: string) => {
+    setConfirmModal({
+      title: 'Delete Major',
+      message: 'Are you sure you want to delete this major?',
+      onConfirm: async () => {
+        try {
+          await authApi.deleteMajor(id);
+          setEditingItem(null);
+          setActiveModal(null);
+          loadMajorsData();
+          showToast('Major deleted successfully!');
+        } catch (e) {
+          console.error(e);
+          showToast('Failed to delete major.', 'error');
+        }
+      }
+    });
   };
 
   // Actions for Roles
@@ -1206,25 +1250,30 @@ const Dashboard = () => {
       setNewRolename('');
       setActiveModal(null);
       loadRolesData();
-      showToast('Peran (Role) berhasil ditambahkan!');
+      showToast('Role added successfully!');
     } catch (e) {
       console.error(e);
-      alert('Gagal menambahkan peran');
+      showToast('Failed to add role.', 'error');
     }
   };
 
-  const handleDeleteRole = async (id: string) => {
-    if (!window.confirm('Yakin ingin menghapus peran (Role) ini?')) return;
-    try {
-      await authApi.deleteRole(id);
-      setEditingItem(null);
-      setActiveModal(null);
-      loadRolesData();
-      showToast('Peran (Role) berhasil dihapus!');
-    } catch (e: any) {
-      console.error(e);
-      alert(e.response?.data?.message || 'Gagal menghapus peran');
-    }
+  const handleDeleteRole = (id: string) => {
+    setConfirmModal({
+      title: 'Delete Role',
+      message: 'Are you sure you want to delete this role?',
+      onConfirm: async () => {
+        try {
+          await authApi.deleteRole(id);
+          setEditingItem(null);
+          setActiveModal(null);
+          loadRolesData();
+          showToast('Role deleted successfully!');
+        } catch (e: any) {
+          console.error(e);
+          showToast(e.response?.data?.message || 'Failed to delete role.', 'error');
+        }
+      }
+    });
   };
 
   // Actions for Sections
@@ -1236,25 +1285,30 @@ const Dashboard = () => {
       setNewSectionname('');
       setActiveModal(null);
       loadSectionsData();
-      showToast('Sekbid (Section) berhasil ditambahkan!');
+      showToast('Section added successfully!');
     } catch (e) {
       console.error(e);
-      alert('Gagal menambahkan sekbid');
+      showToast('Failed to add section.', 'error');
     }
   };
 
-  const handleDeleteSection = async (id: string) => {
-    if (!window.confirm('Yakin ingin menghapus sekbid (Section) ini?')) return;
-    try {
-      await authApi.deleteSection(id);
-      setEditingItem(null);
-      setActiveModal(null);
-      loadSectionsData();
-      showToast('Sekbid (Section) berhasil dihapus!');
-    } catch (e) {
-      console.error(e);
-      alert('Gagal menghapus sekbid');
-    }
+  const handleDeleteSection = (id: string) => {
+    setConfirmModal({
+      title: 'Delete Section',
+      message: 'Are you sure you want to delete this section?',
+      onConfirm: async () => {
+        try {
+          await authApi.deleteSection(id);
+          setEditingItem(null);
+          setActiveModal(null);
+          loadSectionsData();
+          showToast('Section deleted successfully!');
+        } catch (e) {
+          console.error(e);
+          showToast('Failed to delete section.', 'error');
+        }
+      }
+    });
   };
 
   const openAddOrgMemberForRole = (roleNameQuery: string, sectionId: string = '') => {
@@ -1276,7 +1330,7 @@ const Dashboard = () => {
     e.preventDefault();
     const periodIdToUse = selectedOrgPeriodId || selectedChartPeriodId || periods[0]?.id;
     if (!selectedOrgStudentId || !selectedOrgRoleId || !periodIdToUse) {
-      alert('Please select a student.');
+      showToast('Please select a student.', 'error');
       return;
     }
     try {
@@ -1292,10 +1346,10 @@ const Dashboard = () => {
       setSelectedOrgSectionId('');
       setActiveModal(null);
       loadOrgMembersData();
-      showToast('Anggota organisasi berhasil ditambahkan!');
+      showToast('Organization member added successfully!');
     } catch (e: any) {
       console.error(e);
-      alert('Gagal menambahkan anggota organisasi (siswa mungkin sudah memiliki jabatan di periode ini)');
+      showToast('Failed to add organization member. Student might already have a position in this period.', 'error');
     }
   };
 
@@ -1304,7 +1358,7 @@ const Dashboard = () => {
     if (!editingItem) return;
     const periodIdToUse = selectedOrgPeriodId || selectedChartPeriodId || periods[0]?.id;
     if (!selectedOrgStudentId || !selectedOrgRoleId || !periodIdToUse) {
-      alert('Please select a student.');
+      showToast('Please select a student.', 'error');
       return;
     }
     try {
@@ -1321,30 +1375,37 @@ const Dashboard = () => {
       setEditingItem(null);
       setActiveModal(null);
       loadOrgMembersData();
-      showToast('Anggota organisasi berhasil diperbarui!');
+      showToast('Organization member updated successfully!');
     } catch (e: any) {
       console.error(e);
-      alert('Gagal memperbarui anggota organisasi (siswa mungkin sudah memiliki jabatan di periode ini)');
+      showToast('Failed to update organization member. Student might already have a position in this period.', 'error');
     }
   };
 
-  const handleDeleteOrgMember = async (id: string) => {
-    if (!window.confirm('Yakin ingin menghapus anggota organisasi ini?')) return;
-    try {
-      await authApi.deleteOrgMember(id);
-      loadOrgMembersData();
-      showToast('Anggota organisasi berhasil dihapus!');
-    } catch (e) {
-      console.error(e);
-      alert('Gagal menghapus anggota organisasi');
-    }
+  const handleDeleteOrgMember = (id: string) => {
+    setConfirmModal({
+      title: 'Remove Member',
+      message: 'Are you sure you want to remove this organization member?',
+      onConfirm: async () => {
+        try {
+          await authApi.deleteOrgMember(id);
+          loadOrgMembersData();
+          setActiveModal(null);
+          setEditingItem(null);
+          showToast('Organization member removed successfully!');
+        } catch (e) {
+          console.error(e);
+          showToast('Failed to remove organization member.', 'error');
+        }
+      }
+    });
   };
 
   // Actions for Users
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUserUsername.trim() || !newUserPassword.trim() || !newUserEmail.trim()) {
-      alert('Harap isi Username, Password, dan Email.');
+      showToast('Please fill in Username, Password, and Email.', 'error');
       return;
     }
     try {
@@ -1364,27 +1425,32 @@ const Dashboard = () => {
       setNewUserClassId('');
       setActiveModal(null);
       loadUsersData();
-      showToast('User baru berhasil ditambahkan!');
+      showToast('User added successfully!');
     } catch (err: any) {
       console.error(err);
-      alert(err.response?.data?.message || 'Gagal membuat user baru.');
+      showToast(err.response?.data?.message || 'Failed to create user.', 'error');
     }
   };
 
-  const handleDeleteUser = async (id: string) => {
+  const handleDeleteUser = (id: string) => {
     if (id === userData?.id) {
-      alert('Anda tidak dapat menghapus akun Anda sendiri.');
+      showToast('You cannot delete your own account.', 'error');
       return;
     }
-    if (!window.confirm('Yakin ingin menghapus user ini?')) return;
-    try {
-      await authApi.deleteUser(id);
-      loadUsersData();
-      showToast('User berhasil dihapus!');
-    } catch (e) {
-      console.error(e);
-      alert('Gagal menghapus user.');
-    }
+    setConfirmModal({
+      title: 'Delete User',
+      message: 'Are you sure you want to delete this user?',
+      onConfirm: async () => {
+        try {
+          await authApi.deleteUser(id);
+          loadUsersData();
+          showToast('User deleted successfully!');
+        } catch (e) {
+          console.error(e);
+          showToast('Failed to delete user.', 'error');
+        }
+      }
+    });
   };
 
   // Actions for Periods
@@ -1404,10 +1470,10 @@ const Dashboard = () => {
       setNewPeriodVoteEnd('');
       setActiveModal(null);
       loadPeriodsData();
-      showToast('Periode pemilihan OSIS berhasil ditambahkan!');
+      showToast('OSIS period added successfully!');
     } catch (err) {
       console.error(err);
-      alert('Gagal menambahkan periode');
+      showToast('Failed to add period.', 'error');
     }
   };
 
@@ -1427,10 +1493,11 @@ const Dashboard = () => {
       setEditingItem(null);
       setActiveModal(null);
       loadClassesData();
-      showToast('Kelas berhasil diperbarui!');
-    } catch (err) {
+      showToast('Class updated successfully!');
+    } catch (err: any) {
       console.error(err);
-      alert('Gagal mengedit kelas');
+      const errMsg = err.response?.data?.message || 'Failed to edit class.';
+      showToast(errMsg, 'error');
     }
   };
 
@@ -1443,10 +1510,10 @@ const Dashboard = () => {
       setEditingItem(null);
       setActiveModal(null);
       loadGradesData();
-      showToast('Tingkatan kelas (Grade) berhasil diperbarui!');
+      showToast('Grade updated successfully!');
     } catch (err) {
       console.error(err);
-      alert('Gagal mengedit grade');
+      showToast('Failed to edit grade.', 'error');
     }
   };
 
@@ -1463,10 +1530,10 @@ const Dashboard = () => {
       setEditingItem(null);
       setActiveModal(null);
       loadMajorsData();
-      showToast('Jurusan berhasil diperbarui!');
+      showToast('Major updated successfully!');
     } catch (err) {
       console.error(err);
-      alert('Gagal mengedit jurusan');
+      showToast('Failed to edit major.', 'error');
     }
   };
 
@@ -1487,10 +1554,10 @@ const Dashboard = () => {
       setEditingItem(null);
       setActiveModal(null);
       loadPeriodsData();
-      showToast('Periode pemilihan OSIS berhasil diperbarui!');
+      showToast('OSIS period updated successfully!');
     } catch (err) {
       console.error(err);
-      alert('Gagal mengedit periode');
+      showToast('Failed to edit period.', 'error');
     }
   };
 
@@ -1514,10 +1581,10 @@ const Dashboard = () => {
       setEditingItem(null);
       setActiveModal(null);
       loadUsersData();
-      showToast('User berhasil diperbarui!');
+      showToast('User updated successfully!');
     } catch (err: any) {
       console.error(err);
-      alert(err.response?.data?.message || 'Gagal mengedit user');
+      showToast(err.response?.data?.message || 'Failed to edit user.', 'error');
     }
   };
 
@@ -1530,10 +1597,10 @@ const Dashboard = () => {
       setEditingItem(null);
       setActiveModal(null);
       loadRolesData();
-      showToast('Peran (Role) berhasil diperbarui!');
+      showToast('Role updated successfully!');
     } catch (err) {
       console.error(err);
-      alert('Gagal mengedit peran');
+      showToast('Failed to edit role.', 'error');
     }
   };
 
@@ -1546,10 +1613,10 @@ const Dashboard = () => {
       setEditingItem(null);
       setActiveModal(null);
       loadSectionsData();
-      showToast('Sekbid (Section) berhasil diperbarui!');
+      showToast('Section updated successfully!');
     } catch (err) {
       console.error(err);
-      alert('Gagal mengedit sekbid');
+      showToast('Failed to edit section.', 'error');
     }
   };
 
@@ -1557,12 +1624,12 @@ const Dashboard = () => {
     if (!editingItem) return;
     try {
       await authApi.resetUserPassword(editingItem.id, { password: editingItem.username });
-      showToast(`Password untuk "${editingItem.username}" berhasil direset menjadi "${editingItem.username}".`);
+      showToast(`Password for "${editingItem.username}" successfully reset to "${editingItem.username}".`);
       setEditingItem(null);
       setActiveModal(null);
     } catch (err: any) {
       console.error(err);
-      alert(err.response?.data?.message || 'Gagal mereset password.');
+      showToast(err.response?.data?.message || 'Failed to reset password.', 'error');
     }
   };
 
@@ -1608,20 +1675,25 @@ const Dashboard = () => {
       showToast('New candidate successfully added!');
     } catch (err) {
       console.error(err);
-      alert('Failed to add candidate');
+      showToast('Failed to add candidate.', 'error');
     }
   };
 
-  const handleDeleteCandidate = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this candidate?')) return;
-    try {
-      await authApi.deleteCandidate(id);
-      loadCandidatesData();
-      showToast('Candidate successfully deleted!');
-    } catch (err) {
-      console.error(err);
-      alert('Failed to delete candidate');
-    }
+  const handleDeleteCandidate = (id: string) => {
+    setConfirmModal({
+      title: 'Delete Candidate',
+      message: 'Are you sure you want to delete this candidate?',
+      onConfirm: async () => {
+        try {
+          await authApi.deleteCandidate(id);
+          loadCandidatesData();
+          showToast('Candidate successfully deleted!');
+        } catch (err) {
+          console.error(err);
+          showToast('Failed to delete candidate.', 'error');
+        }
+      }
+    });
   };
 
   const handleStartEditCandidate = (c: any) => {
@@ -1640,7 +1712,7 @@ const Dashboard = () => {
   const handleEditCandidate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPresidentId || !selectedVicePresidentId || !newCandidatePeriodId) {
-      alert('President, Vice President, and Period must be selected.');
+      showToast('President, Vice President, and Period must be selected.', 'error');
       return;
     }
     const presUser = users.find(u => u.id === selectedPresidentId);
@@ -1678,13 +1750,13 @@ const Dashboard = () => {
       showToast('Candidate successfully updated!');
     } catch (err) {
       console.error(err);
-      alert('Failed to edit candidate');
+      showToast('Failed to edit candidate.', 'error');
     }
   };
   const handleAddProker = async (e: React.FormEvent, activePeriodId: string) => {
     e.preventDefault();
     if (!prokerName.trim() || !prokerTargetDate.trim()) {
-      alert('Program name and Target timeline are required.');
+      showToast('Program name and Target timeline are required.', 'error');
       return;
     }
     try {
@@ -1704,14 +1776,14 @@ const Dashboard = () => {
       showToast('OSIS work program successfully added!');
     } catch (err) {
       console.error(err);
-      alert('Failed to add work program');
+      showToast('Failed to add work program.', 'error');
     }
   };
 
   const handleEditProker = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prokerName.trim() || !prokerTargetDate.trim() || !editingItem) {
-      alert('Program name and Target timeline are required.');
+      showToast('Program name and Target timeline are required.', 'error');
       return;
     }
     try {
@@ -1732,7 +1804,7 @@ const Dashboard = () => {
       showToast('OSIS work program successfully updated!');
     } catch (err: any) {
       console.error(err);
-      alert(err.response?.data?.message || 'Failed to edit work program');
+      showToast(err.response?.data?.message || 'Failed to edit work program.', 'error');
     }
   };
 
@@ -1745,23 +1817,28 @@ const Dashboard = () => {
     setActiveModal('edit-proker');
   };
 
-  const handleDeleteProker = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this work program?')) return;
-    try {
-      await authApi.deleteProker(id);
-      loadProkersData();
-      showToast('OSIS work program successfully deleted!');
-    } catch (err: any) {
-      console.error(err);
-      alert(err.response?.data?.message || 'Failed to delete work program');
-    }
+  const handleDeleteProker = (id: string) => {
+    setConfirmModal({
+      title: 'Delete Work Program',
+      message: 'Are you sure you want to delete this work program?',
+      onConfirm: async () => {
+        try {
+          await authApi.deleteProker(id);
+          loadProkersData();
+          showToast('OSIS work program successfully deleted!');
+        } catch (err: any) {
+          console.error(err);
+          showToast(err.response?.data?.message || 'Failed to delete work program.', 'error');
+        }
+      }
+    });
   };
 
 
   const handleCastVote = async (candidateId: string, periodId: string) => {
     if (!userData) return;
     if (userData.level === 'employer') {
-      alert('Mohon maaf, akun dengan level Employer tidak diperkenankan untuk memberikan suara.');
+      showToast('Sorry, accounts with Employer level are not allowed to vote.', 'error');
       return;
     }
     const candidate = candidates.find(c => c.id === candidateId);
@@ -1777,11 +1854,11 @@ const Dashboard = () => {
     setVoteConfirmModal(null);
     try {
       await authApi.castVote({ periodId, candidateId });
-      showToast('Terima kasih! Suara Anda telah berhasil dikirim.');
+      showToast('Thank you! Your vote has been cast successfully.');
       loadVotesData();
     } catch (err) {
       console.error(err);
-      alert('Gagal menyalurkan suara. Mungkin Anda sudah memilih untuk periode ini.');
+      showToast('Failed to cast vote. You might have already voted in this period.', 'error');
     }
   };
   // Action for System settings update
@@ -1796,7 +1873,7 @@ const Dashboard = () => {
         systemcontact: sysContact,
       });
       setSystemSettings(updated);
-      showToast('Pengaturan sistem berhasil diperbarui!');
+      showToast('System settings updated successfully!');
       
       // Live reload tab title and favicon
       document.title = `Dashboard - ${updated.systemname}`;
@@ -1805,7 +1882,7 @@ const Dashboard = () => {
       }
     } catch (err) {
       console.error(err);
-      alert('Gagal memperbarui pengaturan.');
+      showToast('Failed to update settings.', 'error');
     }
   };
 
@@ -1888,8 +1965,8 @@ const Dashboard = () => {
   const normalizeRoleForAccess = (roleName: string) => {
     const r = (roleName || '').trim().toLowerCase();
     if (!r) return 'student';
-    if (r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris 1' || r === 'sekretaris 2') return 'secretaris';
-    if (r === 'treasurer 1' || r === 'treasurer 2' || r === 'bendahara 1' || r === 'bendahara 2') return 'treasurer';
+    if (r === 'secretary' || r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris' || r === 'sekretaris 1' || r === 'sekretaris 2') return 'secretaris';
+    if (r === 'treasurer' || r === 'treasurer 1' || r === 'treasurer 2' || r === 'bendahara' || r === 'bendahara 1' || r === 'bendahara 2') return 'treasurer';
     if (r === 'vice principal' || r === 'vice principal 1' || r === 'vice principal 2' || r === 'wakil kepala sekolah') return 'viceprincipal';
     if (r === 'student affair' || r === 'student affairs' || r === 'wakasek kesiswaan' || r === 'pembina osis') return 'student affair';
     if (r === 'member' || r === 'members') return 'student';
@@ -2642,7 +2719,7 @@ const Dashboard = () => {
           memberPerformanceMap[m.studentid] = { present: 0, total: 0, sick: 0, permit: 0, absent: 0 };
         });
 
-        prokerDetailsList.forEach(({ proker, subData }) => {
+        prokerDetailsList.forEach(({ subData }) => {
           const meetings = subData.meetings || [];
           totalMeetings += meetings.length;
 
@@ -3559,13 +3636,13 @@ const Dashboard = () => {
 
         const presidentName = prokerPresident?.student?.user?.username 
           || (selectedProkerCandidate ? (selectedProkerCandidate.presidentName || selectedProkerCandidate.name.split(' & ')[0]) : null);
-        const presidentClass = prokerPresident?.student?.class?.classname 
-          || (selectedProkerCandidate ? (selectedProkerCandidate.presidentClass || selectedProkerCandidate.classes.split(' & ')[0]) : null);
+        // const presidentClass = prokerPresident?.student?.class?.classname 
+        //   || (selectedProkerCandidate ? (selectedProkerCandidate.presidentClass || selectedProkerCandidate.classes.split(' & ')[0]) : null);
 
         const vicePresidentName = prokerVicePresident?.student?.user?.username 
           || (selectedProkerCandidate ? (selectedProkerCandidate.vicePresidentName || selectedProkerCandidate.name.split(' & ')[1]) : null);
-        const vicePresidentClass = prokerVicePresident?.student?.class?.classname 
-          || (selectedProkerCandidate ? (selectedProkerCandidate.vicePresidentClass || selectedProkerCandidate.classes.split(' & ')[1]) : null);
+        // const vicePresidentClass = prokerVicePresident?.student?.class?.classname 
+        //   || (selectedProkerCandidate ? (selectedProkerCandidate.vicePresidentClass || selectedProkerCandidate.classes.split(' & ')[1]) : null);
 
         const hasOfficers = presidentName || vicePresidentName;
 
@@ -3927,7 +4004,7 @@ const Dashboard = () => {
               size: sizeString,
               dataUrl: `mock-file:${file.name}`
             });
-            showToast('Berkas terpilih (Simulasi: berkas > 1.5MB)');
+            showToast('File selected (Simulation: file > 1.5MB)');
           } else {
             const reader = new FileReader();
             reader.onload = (event) => {
@@ -3965,9 +4042,9 @@ const Dashboard = () => {
           if (proposalScheduleInfo) {
             if (!proposalScheduleInfo.canSubmitProposal) {
               if (proposalScheduleInfo.isPastEvent) {
-                alert('Acara sudah lewat. Proposal untuk proker ini ditutup.');
+                showToast('Event has passed. Proposal submission is closed.', 'error');
               } else {
-                alert('Proposal baru bisa dikirim mulai H-1 bulan sebelum acara.');
+                showToast('Proposals can only be submitted starting 1 month before the event.', 'error');
               }
               return;
             }
@@ -3976,7 +4053,7 @@ const Dashboard = () => {
           const title = fd.get('title') as string;
           if (!title) return;
           if (!selectedProposalFile) {
-            alert('Silakan pilih atau seret file proposal terlebih dahulu.');
+            showToast('Please select or drag a proposal file first.', 'error');
             return;
           }
 
@@ -3996,25 +4073,30 @@ const Dashboard = () => {
           });
           e.currentTarget.reset();
           setSelectedProposalFile(null);
-          showToast('Proposal berhasil diajukan!');
+          showToast('Proposal submitted successfully!');
         };
 
         const handleDeleteProposal = (id: string) => {
-          if (!window.confirm('Hapus proposal ini?')) return;
-          updateProkerSubData({
-            ...subData,
-            proposals: (subData.proposals || []).filter((x: any) => x.id !== id)
+          setConfirmModal({
+            title: 'Delete Proposal',
+            message: 'Are you sure you want to delete this proposal?',
+            onConfirm: () => {
+              updateProkerSubData({
+                ...subData,
+                proposals: (subData.proposals || []).filter((x: any) => x.id !== id)
+              });
+              showToast('Proposal deleted successfully!');
+            }
           });
-          showToast('Proposal berhasil dihapus!');
         };
 
-        const handleUpdateProposalStatus = (id: string, status: string) => {
-          updateProkerSubData({
-            ...subData,
-            proposals: (subData.proposals || []).map((x: any) => x.id === id ? { ...x, status } : x)
-          });
-          showToast('Status proposal berhasil diperbarui!');
-        };
+        // const handleUpdateProposalStatus = (id: string, status: string) => {
+        //   updateProkerSubData({
+        //     ...subData,
+        //     proposals: (subData.proposals || []).map((x: any) => x.id === id ? { ...x, status } : x)
+        //   });
+        //   showToast('Proposal status updated successfully!');
+        // };
 
         const handleAddMeeting = (e: React.FormEvent<HTMLFormElement>) => {
           e.preventDefault();
@@ -4036,7 +4118,7 @@ const Dashboard = () => {
             meetings: [...(subData.meetings || []), newMeeting]
           });
           e.currentTarget.reset();
-          showToast('Rapat berhasil dijadwalkan!');
+          showToast('Meeting scheduled successfully!');
         };
 
         const handleAddMeetingFromAbsensi = (e: React.FormEvent<HTMLFormElement>) => {
@@ -4062,20 +4144,25 @@ const Dashboard = () => {
           e.currentTarget.reset();
           setActiveProkerMeetingId(newMeetingId);
           setShowAbsensiAddMeeting(false);
-          showToast('Rapat berhasil ditambahkan dan dipilih!');
+          showToast('Meeting added and selected successfully!');
         };
 
         const handleDeleteMeeting = (id: string) => {
-          if (!window.confirm('Hapus rapat ini?')) return;
-          const newAttendances = { ...subData.attendances };
-          delete newAttendances[id];
+          setConfirmModal({
+            title: 'Delete Meeting',
+            message: 'Are you sure you want to delete this meeting?',
+            onConfirm: () => {
+              const newAttendances = { ...subData.attendances };
+              delete newAttendances[id];
 
-          updateProkerSubData({
-            ...subData,
-            meetings: (subData.meetings || []).filter((x: any) => x.id !== id),
-            attendances: newAttendances
+              updateProkerSubData({
+                ...subData,
+                meetings: (subData.meetings || []).filter((x: any) => x.id !== id),
+                attendances: newAttendances
+              });
+              showToast('Meeting deleted successfully!');
+            }
           });
-          showToast('Rapat berhasil dihapus!');
         };
 
         const handleAddDivision = (e: React.FormEvent<HTMLFormElement>) => {
@@ -4094,17 +4181,22 @@ const Dashboard = () => {
             divisions: [...(subData.divisions || []), newDiv]
           });
           e.currentTarget.reset();
-          showToast('Divisi berhasil ditambahkan!');
+          showToast('Division added successfully!');
         };
 
         const handleDeleteDivision = (id: string) => {
-          if (!window.confirm('Hapus divisi ini? Semua anggota di divisi ini akan dihapus juga.')) return;
-          updateProkerSubData({
-            ...subData,
-            divisions: (subData.divisions || []).filter((x: any) => x.id !== id),
-            members: (subData.members || []).filter((x: any) => x.divisionId !== id)
+          setConfirmModal({
+            title: 'Delete Division',
+            message: 'Are you sure you want to delete this division? All members in this division will also be removed.',
+            onConfirm: () => {
+              updateProkerSubData({
+                ...subData,
+                divisions: (subData.divisions || []).filter((x: any) => x.id !== id),
+                members: (subData.members || []).filter((x: any) => x.divisionId !== id)
+              });
+              showToast('Division deleted successfully!');
+            }
           });
-          showToast('Divisi berhasil dihapus!');
         };
 
         const handleAddMember = (e: React.FormEvent<HTMLFormElement>) => {
@@ -4117,7 +4209,7 @@ const Dashboard = () => {
 
           const selectedMember = prokerEligibleMembers.find((m: any) => m.id === memberId);
           if (!selectedMember) {
-            showToast('Pilih anggota organisasi yang valid terlebih dahulu.');
+            showToast('Please select a valid organization member first.', 'error');
             return;
           }
 
@@ -4135,33 +4227,38 @@ const Dashboard = () => {
             members: [...(subData.members || []), newMember]
           });
           e.currentTarget.reset();
-          showToast('Anggota berhasil ditambahkan!');
+          showToast('Member added successfully!');
         };
 
         const handleDeleteMember = (id: string) => {
-          if (!window.confirm('Hapus anggota ini?')) return;
-          updateProkerSubData({
-            ...subData,
-            members: (subData.members || []).filter((x: any) => x.id !== id)
-          });
-          showToast('Anggota berhasil dihapus!');
-        };
-
-        const handleRecordAttendance = (meetingId: string, memberId: string, status: string) => {
-          const meetingAttendances = subData.attendances[meetingId] || {};
-          const updatedAttendances = {
-            ...subData.attendances,
-            [meetingId]: {
-              ...meetingAttendances,
-              [memberId]: status
+          setConfirmModal({
+            title: 'Delete Member',
+            message: 'Are you sure you want to remove this member?',
+            onConfirm: () => {
+              updateProkerSubData({
+                ...subData,
+                members: (subData.members || []).filter((x: any) => x.id !== id)
+              });
+              showToast('Member removed successfully!');
             }
-          };
-
-          updateProkerSubData({
-            ...subData,
-            attendances: updatedAttendances
           });
         };
+
+        // const handleRecordAttendance = (meetingId: string, memberId: string, status: string) => {
+        //   const meetingAttendances = subData.attendances[meetingId] || {};
+        //   const updatedAttendances = {
+        //     ...subData.attendances,
+        //     [meetingId]: {
+        //       ...meetingAttendances,
+        //       [memberId]: status
+        //     }
+        //   };
+        // 
+        //   updateProkerSubData({
+        //     ...subData,
+        //     attendances: updatedAttendances
+        //   });
+        // };
 
         const handleReportFileSelection = (file: File) => {
           const fileSizeMB = file.size / (1024 * 1024);
@@ -4175,7 +4272,7 @@ const Dashboard = () => {
               size: sizeString,
               dataUrl: `mock-file:${file.name}`
             });
-            showToast('Berkas laporan terpilih (Simulasi: berkas > 1.5MB)');
+            showToast('Report file selected (Simulation: file > 1.5MB)');
           } else {
             const reader = new FileReader();
             reader.onload = (event) => {
@@ -4213,9 +4310,9 @@ const Dashboard = () => {
           if (reportScheduleInfo) {
             if (!reportScheduleInfo.canSubmitReport) {
               if (reportScheduleInfo.isBeforeEvent) {
-                alert('Laporan baru bisa dikirim mulai H+1 hari setelah acara selesai.');
+                showToast('Reports can only be submitted starting 1 day after the event ends.', 'error');
               } else if (reportScheduleInfo.isPastDeadline) {
-                alert('Batas pengiriman laporan sudah lewat. Laporan ditutup setelah H+1 bulan.');
+                showToast('Report submission deadline has passed. Reports close 1 month after the event.', 'error');
               }
               return;
             }
@@ -4225,7 +4322,7 @@ const Dashboard = () => {
           const summary = fd.get('summary') as string;
           if (!title) return;
           if (!selectedReportFile) {
-            alert('Silakan pilih atau seret file laporan terlebih dahulu.');
+            showToast('Please select or drag a report file first.', 'error');
             return;
           }
 
@@ -4246,25 +4343,30 @@ const Dashboard = () => {
           });
           e.currentTarget.reset();
           setSelectedReportFile(null);
-          showToast('Laporan berhasil diajukan!');
+          showToast('Report submitted successfully!');
         };
 
         const handleDeleteReport = (id: string) => {
-          if (!window.confirm('Hapus laporan ini?')) return;
-          updateProkerSubData({
-            ...subData,
-            reports: (subData.reports || []).filter((x: any) => x.id !== id)
+          setConfirmModal({
+            title: 'Delete Report',
+            message: 'Are you sure you want to delete this report?',
+            onConfirm: () => {
+              updateProkerSubData({
+                ...subData,
+                reports: (subData.reports || []).filter((x: any) => x.id !== id)
+              });
+              showToast('Report deleted successfully!');
+            }
           });
-          showToast('Laporan berhasil dihapus!');
         };
 
-        const handleUpdateReportStatus = (id: string, status: string) => {
-          updateProkerSubData({
-            ...subData,
-            reports: (subData.reports || []).map((x: any) => x.id === id ? { ...x, status } : x)
-          });
-          showToast('Status laporan berhasil diperbarui!');
-        };
+        // const handleUpdateReportStatus = (id: string, status: string) => {
+        //   updateProkerSubData({
+        //     ...subData,
+        //     reports: (subData.reports || []).map((x: any) => x.id === id ? { ...x, status } : x)
+        //   });
+        //   showToast('Report status updated successfully!');
+        // };
 
         const handleDocFileSelection = (file: File) => {
           const sizeMB = file.size / (1024 * 1024);
@@ -4281,7 +4383,7 @@ const Dashboard = () => {
               size: sizeString,
               dataUrl: 'mock-file:large'
             });
-            alert('File is too large (> 5MB). Image preview will not be loaded, but you can still submit.');
+            showToast('File is too large (> 5MB). Image preview will not be loaded, but you can still submit.', 'info');
           } else {
             const reader = new FileReader();
             reader.onload = (event) => {
@@ -4319,7 +4421,7 @@ const Dashboard = () => {
           const fd = new FormData(e.currentTarget);
           const title = fd.get('title') as string;
           if (!title) {
-            alert('Title is required.');
+            showToast('Title is required.', 'error');
             return;
           }
 
@@ -4327,12 +4429,12 @@ const Dashboard = () => {
           if (docInputMethod === 'link') {
             imageUrl = fd.get('imageUrl') as string;
             if (!imageUrl) {
-              alert('Image URL is required.');
+              showToast('Image URL is required.', 'error');
               return;
             }
           } else {
             if (!selectedDocFile) {
-              alert('Please select or drag an image file first.');
+              showToast('Please select or drag an image file first.', 'error');
               return;
             }
             imageUrl = selectedDocFile.dataUrl;
@@ -4714,13 +4816,17 @@ const Dashboard = () => {
                                         {x.status !== 'Disetujui' && (
                                           <button
                                             onClick={() => {
-                                              if (window.confirm('Approve this proposal?')) {
-                                                updateProkerSubData({
-                                                  ...subData,
-                                                  proposals: subData.proposals.map((p: any) => p.id === x.id ? { ...p, status: 'Disetujui', reason: undefined } : p)
-                                                });
-                                                showToast('Proposal approved!');
-                                              }
+                                              setConfirmModal({
+                                                title: 'Approve Proposal',
+                                                message: 'Are you sure you want to approve this proposal?',
+                                                onConfirm: () => {
+                                                  updateProkerSubData({
+                                                    ...subData,
+                                                    proposals: subData.proposals.map((p: any) => p.id === x.id ? { ...p, status: 'Disetujui', reason: undefined } : p)
+                                                  });
+                                                  showToast('Proposal approved!');
+                                                }
+                                              });
                                             }}
                                             style={{
                                               width: '24px',
@@ -4750,7 +4856,7 @@ const Dashboard = () => {
                                               const reason = window.prompt('Enter rejection reason for this proposal:');
                                               if (reason === null) return;
                                               if (!reason.trim()) {
-                                                alert('Rejection reason cannot be empty.');
+                                                showToast('Rejection reason cannot be empty.', 'error');
                                                 return;
                                               }
                                               updateProkerSubData({
@@ -5036,13 +5142,17 @@ const Dashboard = () => {
                                         {x.status !== 'Disetujui' && (
                                           <button
                                             onClick={() => {
-                                              if (window.confirm('Approve this report?')) {
-                                                updateProkerSubData({
-                                                  ...subData,
-                                                  reports: subData.reports.map((p: any) => p.id === x.id ? { ...p, status: 'Disetujui', reason: undefined } : p)
-                                                });
-                                                showToast('Report approved!');
-                                              }
+                                              setConfirmModal({
+                                                title: 'Approve Report',
+                                                message: 'Are you sure you want to approve this report?',
+                                                onConfirm: () => {
+                                                  updateProkerSubData({
+                                                    ...subData,
+                                                    reports: subData.reports.map((p: any) => p.id === x.id ? { ...p, status: 'Disetujui', reason: undefined } : p)
+                                                  });
+                                                  showToast('Report approved!');
+                                                }
+                                              });
                                             }}
                                             style={{
                                               width: '24px',
@@ -5072,7 +5182,7 @@ const Dashboard = () => {
                                               const reason = window.prompt('Enter rejection reason for this report:');
                                               if (reason === null) return;
                                               if (!reason.trim()) {
-                                                alert('Rejection reason cannot be empty.');
+                                                showToast('Rejection reason cannot be empty.', 'error');
                                                 return;
                                               }
                                               updateProkerSubData({
@@ -6145,8 +6255,8 @@ const Dashboard = () => {
                           setEditingItem(p);
                           setNewPeriodYear(p.yearLabel);
                           setNewPeriodStatus(p.status);
-                          setNewPeriodVoteStart(p.voteStartDate || '');
-                          setNewPeriodVoteEnd(p.voteEndDate || '');
+                          setNewPeriodVoteStart(formatForDateTimeLocal(p.voteStartDate));
+                          setNewPeriodVoteEnd(formatForDateTimeLocal(p.voteEndDate));
                           setActiveModal('edit-period');
                         }} className="action-btn">
                           <Edit2 size={13} /> Edit
@@ -6300,7 +6410,7 @@ const Dashboard = () => {
           m.role?.rolename.toLowerCase().includes('secretary')
         );
         const secretary1 = secretaries[0];
-        const secretary2 = secretaries[1];
+        // const secretary2 = secretaries[1];
 
         // Treasurers (Bendahara 1 & 2)
         const treasurers = periodMembers.filter(m => 
@@ -6308,7 +6418,7 @@ const Dashboard = () => {
           m.role?.rolename.toLowerCase().includes('bendahara')
         );
         const treasurer1 = treasurers[0];
-        const treasurer2 = treasurers[1];
+        // const treasurer2 = treasurers[1];
 
         // Seksi Bidang (Sekbid)
         const sekbidGroups = sections.map(sec => {
@@ -6518,7 +6628,7 @@ const Dashboard = () => {
                         {secretary1 ? (
                           renderNodeCard(
                             formatOrgStudentName(secretary1.student),
-                            'Secretary 1',
+                            'Secretary',
                             formatOrgStudentClassLabel(secretary1.student),
                             () => {
                               setEditingItem(secretary1);
@@ -6535,33 +6645,7 @@ const Dashboard = () => {
                             style={{ opacity: 0.7, cursor: canEditOrg ? 'pointer' : 'default' }}
                             onClick={() => canEditOrg && openAddOrgMemberForRole('secretary')}
                           >
-                            <div className="org-chart-node-role">Secretary 1</div>
-                            <h4 className="org-chart-node-name" style={{ color: 'var(--text-muted)' }}>Unassigned</h4>
-                            <p className="org-chart-node-class" style={{ visibility: 'hidden', margin: 0 }}>-</p>
-                          </div>
-                        )}
-
-                        {secretary2 ? (
-                          renderNodeCard(
-                            formatOrgStudentName(secretary2.student),
-                            'Secretary 2',
-                            formatOrgStudentClassLabel(secretary2.student),
-                            () => {
-                              setEditingItem(secretary2);
-                              setSelectedOrgStudentId(secretary2.studentid);
-                              setSelectedOrgRoleId(secretary2.roleid);
-                              setSelectedOrgPeriodId(secretary2.periodid);
-                              setSelectedOrgSectionId(secretary2.sectionid || '');
-                              setActiveModal('edit-org-member');
-                            }
-                          )
-                        ) : (
-                          <div 
-                            className="org-chart-node org-chart-section-card animate-slideup" 
-                            style={{ opacity: 0.7, cursor: canEditOrg ? 'pointer' : 'default' }}
-                            onClick={() => canEditOrg && openAddOrgMemberForRole('secretary')}
-                          >
-                            <div className="org-chart-node-role">Secretary 2</div>
+                            <div className="org-chart-node-role">Secretary</div>
                             <h4 className="org-chart-node-name" style={{ color: 'var(--text-muted)' }}>Unassigned</h4>
                             <p className="org-chart-node-class" style={{ visibility: 'hidden', margin: 0 }}>-</p>
                           </div>
@@ -6576,7 +6660,7 @@ const Dashboard = () => {
                         {treasurer1 ? (
                           renderNodeCard(
                             formatOrgStudentName(treasurer1.student),
-                            'Treasurer 1',
+                            'Treasurer',
                             formatOrgStudentClassLabel(treasurer1.student),
                             () => {
                               setEditingItem(treasurer1);
@@ -6593,33 +6677,7 @@ const Dashboard = () => {
                             style={{ opacity: 0.7, cursor: canEditOrg ? 'pointer' : 'default' }}
                             onClick={() => canEditOrg && openAddOrgMemberForRole('treasurer')}
                           >
-                            <div className="org-chart-node-role">Treasurer 1</div>
-                            <h4 className="org-chart-node-name" style={{ color: 'var(--text-muted)' }}>Unassigned</h4>
-                            <p className="org-chart-node-class" style={{ visibility: 'hidden', margin: 0 }}>-</p>
-                          </div>
-                        )}
-
-                        {treasurer2 ? (
-                          renderNodeCard(
-                            formatOrgStudentName(treasurer2.student),
-                            'Treasurer 2',
-                            formatOrgStudentClassLabel(treasurer2.student),
-                            () => {
-                              setEditingItem(treasurer2);
-                              setSelectedOrgStudentId(treasurer2.studentid);
-                              setSelectedOrgRoleId(treasurer2.roleid);
-                              setSelectedOrgPeriodId(treasurer2.periodid);
-                              setSelectedOrgSectionId(treasurer2.sectionid || '');
-                              setActiveModal('edit-org-member');
-                            }
-                          )
-                        ) : (
-                          <div 
-                            className="org-chart-node org-chart-section-card animate-slideup" 
-                            style={{ opacity: 0.7, cursor: canEditOrg ? 'pointer' : 'default' }}
-                            onClick={() => canEditOrg && openAddOrgMemberForRole('treasurer')}
-                          >
-                            <div className="org-chart-node-role">Treasurer 2</div>
+                            <div className="org-chart-node-role">Treasurer</div>
                             <h4 className="org-chart-node-name" style={{ color: 'var(--text-muted)' }}>Unassigned</h4>
                             <p className="org-chart-node-class" style={{ visibility: 'hidden', margin: 0 }}>-</p>
                           </div>
@@ -7506,24 +7564,52 @@ const Dashboard = () => {
             <div className="modal-card animate-slideup" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
               <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: '0' }}>
                 <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger)' }}>
-                  <Award size={20} /> Konfirmasi Pilihan Suara
+                  <Award size={20} /> Confirm Voting Choice
                 </h3>
               </div>
               <div style={{ padding: '20px 24px', textAlign: 'left', fontSize: '14px', lineHeight: 1.6, color: 'var(--text-dark)' }}>
-                Apakah Anda yakin ingin menyalurkan suara Anda untuk paslon <strong>{voteConfirmModal.candidateName}</strong>?
+                Are you sure you want to cast your vote for candidate pair <strong>{voteConfirmModal.candidateName}</strong>?
                 <p style={{ marginTop: '12px', color: 'var(--text-muted)', fontSize: '12px', background: 'rgba(239, 68, 68, 0.08)', padding: '8px 12px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
-                  ⚠️ Pilihan Anda bersifat final dan <strong>tidak dapat diubah atau ditarik kembali</strong> setelah dikirim.
+                  ⚠️ Your choice is final and <strong>cannot be changed or withdrawn</strong> after submission.
                 </p>
               </div>
               <div className="modal-actions" style={{ padding: '0 24px 24px', marginTop: 0 }}>
-                <button type="button" className="btn-secondary-sm" onClick={() => setVoteConfirmModal(null)}>Batal</button>
+                <button type="button" className="btn-secondary-sm" onClick={() => setVoteConfirmModal(null)}>Cancel</button>
                 <button 
                   type="button" 
                   className="btn-primary-sm" 
                   style={{ background: 'var(--danger)', border: 'none', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)', color: '#fff' }}
                   onClick={handleConfirmVoteSubmit}
                 >
-                  Kirim Suara Saya
+                  Submit My Vote
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {confirmModal && (
+          <div className="modal-backdrop" onClick={() => setConfirmModal(null)}>
+            <div className="modal-card animate-slideup" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+              <div className="modal-header">
+                <h3 className="modal-title">{confirmModal.title}</h3>
+                <button className="modal-close-btn" onClick={() => setConfirmModal(null)}>&times;</button>
+              </div>
+              <div style={{ padding: '20px 24px', textAlign: 'left', fontSize: '14px', lineHeight: 1.6, color: 'var(--text-dark)' }}>
+                {confirmModal.message}
+              </div>
+              <div className="modal-actions" style={{ padding: '0 24px 24px', marginTop: 0 }}>
+                <button type="button" className="btn-secondary-sm" onClick={() => setConfirmModal(null)}>Cancel</button>
+                <button 
+                  type="button" 
+                  className="btn-primary-sm" 
+                  onClick={async () => {
+                    const callback = confirmModal.onConfirm;
+                    setConfirmModal(null);
+                    await callback();
+                  }}
+                >
+                  Confirm
                 </button>
               </div>
             </div>
@@ -7826,11 +7912,10 @@ const Dashboard = () => {
           <div className="modal-card animate-slideup" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">
-                {activeModal === 'add-class' && 'Tambah Kelas Baru'}
-                {activeModal === 'edit-class' && 'Edit Kelas'}
-                {activeModal === 'add-grade' && 'Tambah Grade Baru'}
+                {activeModal === 'add-class' && 'Add New Class'}
+                {activeModal === 'edit-class' && 'Edit Class'}
+                {activeModal === 'add-grade' && 'Add New Grade'}
                 {activeModal === 'edit-grade' && 'Edit Grade'}
-                {activeModal === 'add-major' && 'Tambah Jurusan Baru'}
                 {activeModal === 'add-major' && 'Add New Major'}
                 {activeModal === 'edit-major' && 'Edit Major'}
                 {activeModal === 'add-period' && 'Add New Period'}
@@ -7854,8 +7939,8 @@ const Dashboard = () => {
             {activeModal === 'add-class' && (
               <form onSubmit={handleAddClass} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Nama Kelas</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: XII RPL 1" value={newClassname} onChange={e => setNewClassname(e.target.value)} required />
+                  <label className="form-label">Class Name</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: XII RPL 1" value={newClassname} onChange={e => setNewClassname(e.target.value)} required />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Grade</label>
@@ -7865,20 +7950,20 @@ const Dashboard = () => {
                     const nextMajors = getFilteredMajorsByGrade(nextGradeId);
                     setSelectedMajorId(nextMajors.length === 1 ? nextMajors[0].id : '');
                   }} required>
-                    <option value="">Pilih Grade</option>
+                    <option value="">Select Grade</option>
                     {grades.map(g => <option key={g.id} value={g.id}>{g.gradename}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Jurusan</label>
+                  <label className="form-label">Major</label>
                   <select className="form-input" style={{ paddingLeft: '16px' }} value={selectedMajorId} onChange={e => setSelectedMajorId(e.target.value)} required disabled={!selectedGradeId}>
-                    <option value="">Pilih Jurusan</option>
+                    <option value="">Select Major</option>
                     {filteredClassMajors.map(m => <option key={m.id} value={m.id}>{m.majorname} ({m.majorcode})</option>)}
                   </select>
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -7886,12 +7971,12 @@ const Dashboard = () => {
             {activeModal === 'add-grade' && (
               <form onSubmit={handleAddGrade} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Nama Grade</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: X" value={newGradename} onChange={e => setNewGradename(e.target.value)} required />
+                  <label className="form-label">Grade Name</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: X" value={newGradename} onChange={e => setNewGradename(e.target.value)} required />
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -7899,16 +7984,16 @@ const Dashboard = () => {
             {activeModal === 'add-major' && (
               <form onSubmit={handleAddMajor} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Kode Jurusan</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: RPL" value={newMajorcode} onChange={e => setNewMajorcode(e.target.value)} required />
+                  <label className="form-label">Major Code</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: RPL" value={newMajorcode} onChange={e => setNewMajorcode(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Nama Lengkap Jurusan</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: Rekayasa Perangkat Lunak" value={newMajorname} onChange={e => setNewMajorname(e.target.value)} required />
+                  <label className="form-label">Full Major Name</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: Software Engineering" value={newMajorname} onChange={e => setNewMajorname(e.target.value)} required />
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -7916,12 +8001,12 @@ const Dashboard = () => {
             {activeModal === 'add-role' && (
               <form onSubmit={handleAddRole} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Nama Peran (Role)</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: sekretaris 1" value={newRolename} onChange={e => setNewRolename(e.target.value)} required />
+                  <label className="form-label">Role Name</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: Secretary" value={newRolename} onChange={e => setNewRolename(e.target.value)} required />
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -7929,12 +8014,12 @@ const Dashboard = () => {
             {activeModal === 'add-section' && (
               <form onSubmit={handleAddSection} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Nama Sekbid (Section)</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: sekbid mading" value={newSectionname} onChange={e => setNewSectionname(e.target.value)} required />
+                  <label className="form-label">Section Name</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: Section Mading" value={newSectionname} onChange={e => setNewSectionname(e.target.value)} required />
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -7942,8 +8027,8 @@ const Dashboard = () => {
             {(activeModal === 'add-period' || activeModal === 'edit-period') && (
               <form onSubmit={activeModal === 'edit-period' ? handleEditPeriodSubmit : handleAddPeriod} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Tahun Ajaran Periode</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: 2027/2028" value={newPeriodYear} onChange={e => setNewPeriodYear(e.target.value)} required />
+                  <label className="form-label">Academic Period Year</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: 2027/2028" value={newPeriodYear} onChange={e => setNewPeriodYear(e.target.value)} required />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Status</label>
@@ -7954,7 +8039,7 @@ const Dashboard = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Waktu Mulai Voting</label>
+                  <label className="form-label">Vote Start Time</label>
                   <input 
                     type="datetime-local" 
                     className="form-input" 
@@ -7965,7 +8050,7 @@ const Dashboard = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Waktu Selesai Voting</label>
+                  <label className="form-label">Vote End Time</label>
                   <input 
                     type="datetime-local" 
                     className="form-input" 
@@ -7976,8 +8061,8 @@ const Dashboard = () => {
                   />
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -7986,41 +8071,41 @@ const Dashboard = () => {
               <form onSubmit={handleAddUser} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
                   <label className="form-label">Username</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Masukkan username" value={newUserUsername} onChange={e => setNewUserUsername(e.target.value)} required />
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Enter username" value={newUserUsername} onChange={e => setNewUserUsername(e.target.value)} required />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Password</label>
-                  <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Masukkan password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} required />
+                  <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Enter password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} required />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email</label>
-                  <input type="email" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: user@email.com" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} required />
+                  <input type="email" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: user@email.com" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Level Akses</label>
+                  <label className="form-label">Access Level</label>
                   <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserLevel} onChange={e => {
                     setNewUserLevel(e.target.value);
                     setNewUserRole('');
                   }} required>
-                    <option value="student">Student (Siswa)</option>
-                    <option value="school">School (Pihak Sekolah)</option>
-                    <option value="employer">Employer (Mitra Industri)</option>
+                    <option value="student">Student</option>
+                    <option value="school">School Staff</option>
+                    <option value="employer">Employer</option>
                   </select>
                 </div>
                 
                 {newUserLevel === 'student' && (
                   <>
                     <div className="form-group">
-                      <label className="form-label">Pilih Kelas</label>
+                      <label className="form-label">Select Class</label>
                       <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserClassId} onChange={e => setNewUserClassId(e.target.value)} required>
-                        <option value="">Pilih Kelas</option>
+                        <option value="">Select Class</option>
                         {classes.map(c => <option key={c.id} value={c.id}>{`${c.grade?.gradename || ''} ${c.major?.majorcode || ''} ${c.classname}`.trim()}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Role OSIS (Opsional)</label>
+                      <label className="form-label">OSIS Role (Optional)</label>
                       <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)}>
-                        <option value="">Bukan Pengurus (null)</option>
+                        <option value="">Not OSIS Staff (null)</option>
                         {roles.map(r => (
                           <option key={r.id} value={r.rolename}>{r.rolename}</option>
                         ))}
@@ -8031,9 +8116,9 @@ const Dashboard = () => {
 
                 {newUserLevel === 'school' && (
                   <div className="form-group">
-                    <label className="form-label">Jabatan Sekolah (Role)</label>
+                    <label className="form-label">School Staff Role</label>
                     <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)} required>
-                      <option value="">Pilih Jabatan</option>
+                      <option value="">Select Position</option>
                       {roles.map(r => (
                         <option key={r.id} value={r.rolename}>{r.rolename}</option>
                       ))}
@@ -8043,9 +8128,9 @@ const Dashboard = () => {
 
                 {newUserLevel === 'employer' && (
                   <div className="form-group">
-                    <label className="form-label">Jabatan Mitra (Role)</label>
+                    <label className="form-label">Partner Position (Role)</label>
                     <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)} required>
-                      <option value="">Pilih Jabatan</option>
+                      <option value="">Select Position</option>
                       {roles.map(r => (
                         <option key={r.id} value={r.rolename}>{r.rolename}</option>
                       ))}
@@ -8054,8 +8139,8 @@ const Dashboard = () => {
                 )}
 
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => setActiveModal(null)}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -8063,8 +8148,8 @@ const Dashboard = () => {
             {activeModal === 'edit-class' && (
               <form onSubmit={handleEditClassSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Nama Kelas</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: XII RPL 1" value={newClassname} onChange={e => setNewClassname(e.target.value)} required />
+                  <label className="form-label">Class Name</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: XII RPL 1" value={newClassname} onChange={e => setNewClassname(e.target.value)} required />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Grade</label>
@@ -8074,20 +8159,20 @@ const Dashboard = () => {
                     const nextMajors = getFilteredMajorsByGrade(nextGradeId);
                     setSelectedMajorId(nextMajors.length === 1 ? nextMajors[0].id : '');
                   }} required>
-                    <option value="">Pilih Grade</option>
+                    <option value="">Select Grade</option>
                     {grades.map(g => <option key={g.id} value={g.id}>{g.gradename}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Jurusan</label>
+                  <label className="form-label">Major</label>
                   <select className="form-input" style={{ paddingLeft: '16px' }} value={selectedMajorId} onChange={e => setSelectedMajorId(e.target.value)} required disabled={!selectedGradeId}>
-                    <option value="">Pilih Jurusan</option>
+                    <option value="">Select Major</option>
                     {filteredClassMajors.map(m => <option key={m.id} value={m.id}>{m.majorname} ({m.majorcode})</option>)}
                   </select>
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -8095,12 +8180,12 @@ const Dashboard = () => {
             {activeModal === 'edit-grade' && (
               <form onSubmit={handleEditGradeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Nama Grade</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: X" value={newGradename} onChange={e => setNewGradename(e.target.value)} required />
+                  <label className="form-label">Grade Name</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: X" value={newGradename} onChange={e => setNewGradename(e.target.value)} required />
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -8108,16 +8193,16 @@ const Dashboard = () => {
             {activeModal === 'edit-major' && (
               <form onSubmit={handleEditMajorSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Kode Jurusan</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: RPL" value={newMajorcode} onChange={e => setNewMajorcode(e.target.value)} required />
+                  <label className="form-label">Major Code</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: RPL" value={newMajorcode} onChange={e => setNewMajorcode(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Nama Lengkap Jurusan</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: Rekayasa Perangkat Lunak" value={newMajorname} onChange={e => setNewMajorname(e.target.value)} required />
+                  <label className="form-label">Full Major Name</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: Software Engineering" value={newMajorname} onChange={e => setNewMajorname(e.target.value)} required />
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -8125,12 +8210,12 @@ const Dashboard = () => {
             {activeModal === 'edit-role' && (
               <form onSubmit={handleEditRoleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Nama Peran (Role)</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: sekretaris 1" value={newRolename} onChange={e => setNewRolename(e.target.value)} required />
+                  <label className="form-label">Role Name</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: Secretary" value={newRolename} onChange={e => setNewRolename(e.target.value)} required />
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -8138,12 +8223,12 @@ const Dashboard = () => {
             {activeModal === 'edit-section' && (
               <form onSubmit={handleEditSectionSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Nama Sekbid (Section)</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: sekbid mading" value={newSectionname} onChange={e => setNewSectionname(e.target.value)} required />
+                  <label className="form-label">Section Name</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: Section Mading" value={newSectionname} onChange={e => setNewSectionname(e.target.value)} required />
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -8153,35 +8238,35 @@ const Dashboard = () => {
             {activeModal === 'edit-user' && (
               <form onSubmit={handleEditUserSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Username (Tidak dapat diubah)</label>
+                  <label className="form-label">Username (Cannot be changed)</label>
                   <input type="text" className="form-input" style={{ paddingLeft: '16px', opacity: 0.6 }} value={newUserUsername} disabled />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Password Baru (Kosongkan jika tidak diubah)</label>
-                  <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Masukkan password baru" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} />
+                  <label className="form-label">New Password (Leave empty if unchanged)</label>
+                  <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Enter new password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email</label>
-                  <input type="email" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: user@email.com" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} required />
+                  <input type="email" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: user@email.com" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Level Akses (Tidak dapat diubah)</label>
+                  <label className="form-label">Access Level (Cannot be changed)</label>
                   <input type="text" className="form-input" style={{ paddingLeft: '16px', opacity: 0.6 }} value={newUserLevel} disabled />
                 </div>
                 
                 {newUserLevel === 'student' && (
                   <>
                     <div className="form-group">
-                      <label className="form-label">Pilih Kelas</label>
+                      <label className="form-label">Select Class</label>
                       <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserClassId} onChange={e => setNewUserClassId(e.target.value)} required>
-                        <option value="">Pilih Kelas</option>
+                        <option value="">Select Class</option>
                         {classes.map(c => <option key={c.id} value={c.id}>{`${c.grade?.gradename || ''} ${c.major?.majorcode || ''} ${c.classname}`.trim()}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Role OSIS (Opsional)</label>
+                      <label className="form-label">OSIS Role (Optional)</label>
                       <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)}>
-                        <option value="">Bukan Pengurus (null)</option>
+                        <option value="">Not OSIS Staff (null)</option>
                         {roles.map(r => (
                           <option key={r.id} value={r.rolename}>{r.rolename}</option>
                         ))}
@@ -8192,9 +8277,9 @@ const Dashboard = () => {
 
                 {newUserLevel === 'school' && (
                   <div className="form-group">
-                    <label className="form-label">Jabatan Sekolah (Role)</label>
+                    <label className="form-label">School Staff Role</label>
                     <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)} required>
-                      <option value="">Pilih Jabatan</option>
+                      <option value="">Select Position</option>
                       {roles.map(r => (
                         <option key={r.id} value={r.rolename}>{r.rolename}</option>
                       ))}
@@ -8204,9 +8289,9 @@ const Dashboard = () => {
 
                 {newUserLevel === 'employer' && (
                   <div className="form-group">
-                    <label className="form-label">Jabatan Mitra (Role)</label>
+                    <label className="form-label">Partner Position (Role)</label>
                     <select className="form-input" style={{ paddingLeft: '16px' }} value={newUserRole} onChange={e => setNewUserRole(e.target.value)} required>
-                      <option value="">Pilih Jabatan</option>
+                      <option value="">Select Position</option>
                       {roles.map(r => (
                         <option key={r.id} value={r.rolename}>{r.rolename}</option>
                       ))}
@@ -8215,8 +8300,8 @@ const Dashboard = () => {
                 )}
 
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -8226,14 +8311,14 @@ const Dashboard = () => {
             {activeModal === 'confirm-reset-pw' && (
               <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-dark)', lineHeight: '1.6' }}>
-                  Apakah Anda yakin ingin mereset password untuk pengguna <strong>{editingItem?.username}</strong>?
+                  Are you sure you want to reset the password for user <strong>{editingItem?.username}</strong>?
                 </p>
                 <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)', background: 'var(--bg-soft-white)', padding: '12px', borderRadius: '8px', borderLeft: '4px solid var(--warning)' }}>
-                  Password baru akan otomatis diatur ulang menjadi sama dengan username-nya: <strong>{editingItem?.username}</strong>
+                  The new password will be automatically reset to match the username: <strong>{editingItem?.username}</strong>
                 </p>
                 <div className="modal-actions" style={{ marginTop: '8px' }}>
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
-                  <button type="button" className="btn-primary-sm" onClick={executeResetPasswordToUsername} style={{ background: 'var(--warning)', borderColor: 'var(--warning)', color: '#ffffff' }}>Ya, Reset Password</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
+                  <button type="button" className="btn-primary-sm" onClick={executeResetPasswordToUsername} style={{ background: 'var(--warning)', borderColor: 'var(--warning)', color: '#ffffff' }}>Yes, Reset Password</button>
                 </div>
               </div>
             )}
@@ -8462,7 +8547,7 @@ const Dashboard = () => {
                       </select>
                       {availableStudents.length === 0 && (
                         <p style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px' }}>
-                          ⚠️ Semua murid di periode ini sudah memiliki jabatan/role.
+                          ⚠️ All students in this period already have an assigned role/position.
                         </p>
                       )}
                     </div>
@@ -8475,13 +8560,9 @@ const Dashboard = () => {
                       type="button" 
                       className="btn-danger-sm" 
                       style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-                      onClick={async () => {
+                      onClick={() => {
                         if (editingItem && editingItem.id) {
-                          if (window.confirm('Are you sure you want to remove this member?')) {
-                            await handleDeleteOrgMember(editingItem.id);
-                            setActiveModal(null);
-                            setEditingItem(null);
-                          }
+                          handleDeleteOrgMember(editingItem.id);
                         }
                       }}
                     >
@@ -8504,24 +8585,52 @@ const Dashboard = () => {
           <div className="modal-card animate-slideup" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <div className="modal-header" style={{ borderBottom: 'none', paddingBottom: '0' }}>
               <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger)' }}>
-                <Award size={20} /> Konfirmasi Pilihan Suara
+                <Award size={20} /> Confirm Voting Choice
               </h3>
             </div>
             <div style={{ padding: '20px 24px', textAlign: 'left', fontSize: '14px', lineHeight: 1.6, color: 'var(--text-dark)' }}>
-              Apakah Anda yakin ingin menyalurkan suara Anda untuk paslon <strong>{voteConfirmModal.candidateName}</strong>?
+              Are you sure you want to cast your vote for candidate pair <strong>{voteConfirmModal.candidateName}</strong>?
               <p style={{ marginTop: '12px', color: 'var(--text-muted)', fontSize: '12px', background: 'rgba(239, 68, 68, 0.08)', padding: '8px 12px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.15)' }}>
-                ⚠️ Pilihan Anda bersifat final dan <strong>tidak dapat diubah atau ditarik kembali</strong> setelah dikirim.
+                ⚠️ Your choice is final and <strong>cannot be changed or withdrawn</strong> after submission.
               </p>
             </div>
             <div className="modal-actions" style={{ padding: '0 24px 24px', marginTop: 0 }}>
-              <button type="button" className="btn-secondary-sm" onClick={() => setVoteConfirmModal(null)}>Batal</button>
+              <button type="button" className="btn-secondary-sm" onClick={() => setVoteConfirmModal(null)}>Cancel</button>
               <button 
                 type="button" 
                 className="btn-primary-sm" 
                 style={{ background: 'var(--danger)', border: 'none', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)', color: '#fff' }}
                 onClick={handleConfirmVoteSubmit}
               >
-                Kirim Suara Saya
+                Submit My Vote
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmModal && (
+        <div className="modal-backdrop" onClick={() => setConfirmModal(null)}>
+          <div className="modal-card animate-slideup" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">{confirmModal.title}</h3>
+              <button className="modal-close-btn" onClick={() => setConfirmModal(null)}>&times;</button>
+            </div>
+            <div style={{ padding: '20px 24px', textAlign: 'left', fontSize: '14px', lineHeight: 1.6, color: 'var(--text-dark)' }}>
+              {confirmModal.message}
+            </div>
+            <div className="modal-actions" style={{ padding: '0 24px 24px', marginTop: 0 }}>
+              <button type="button" className="btn-secondary-sm" onClick={() => setConfirmModal(null)}>Cancel</button>
+              <button 
+                type="button" 
+                className="btn-primary-sm" 
+                onClick={async () => {
+                  const callback = confirmModal.onConfirm;
+                  setConfirmModal(null);
+                  await callback();
+                }}
+              >
+                Confirm
               </button>
             </div>
           </div>
@@ -8615,11 +8724,11 @@ const Dashboard = () => {
         <ScannerModal 
           onClose={() => {
             setShowScanner(false);
-            setScannerResult(null);
-            setScannerError(null);
+            // setScannerResult(null);
+            // setScannerError(null);
           }}
-          onSuccess={(res) => {
-            setScannerResult(res);
+          onSuccess={(_res) => {
+            // setScannerResult(_res);
             loadProkersData(); // refresh data
           }}
         />

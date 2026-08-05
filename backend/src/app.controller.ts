@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, BadRequestException, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, BadRequestException, Query, ConflictException } from '@nestjs/common';
 import { AppService } from './app.service';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -185,13 +185,20 @@ export class AppController {
 
     this.validateClassMajorCombination(grade.gradename, major);
 
-    return this.prisma.class.create({
-      data: {
-        classname: body.classname,
-        gradeid: body.gradeid,
-        majorid: body.majorid,
-      },
-    });
+    try {
+      return await this.prisma.class.create({
+        data: {
+          classname: body.classname,
+          gradeid: body.gradeid,
+          majorid: body.majorid,
+        },
+      });
+    } catch (e: any) {
+      if (e.code === 'P2002') {
+        throw new ConflictException('Class name with this grade and major combination already exists.');
+      }
+      throw e;
+    }
   }
 
   @Delete('admin/classes/:id')
@@ -1077,14 +1084,21 @@ export class AppController {
 
     this.validateClassMajorCombination(grade.gradename, major);
 
-    return this.prisma.class.update({
-      where: { id },
-      data: {
-        classname: body.classname,
-        gradeid: gradeId,
-        majorid: majorId,
-      },
-    });
+    try {
+      return await this.prisma.class.update({
+        where: { id },
+        data: {
+          classname: body.classname,
+          gradeid: gradeId,
+          majorid: majorId,
+        },
+      });
+    } catch (e: any) {
+      if (e.code === 'P2002') {
+        throw new ConflictException('Class name with this grade and major combination already exists.');
+      }
+      throw e;
+    }
   }
 
   @Put('admin/grades/:id')
