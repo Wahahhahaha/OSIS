@@ -32,25 +32,22 @@ async function main() {
 
   console.log('Seeding roles...');
   const roleNames = [
-    'superadmin',
-    'principal',
-    'viceprincipal',
-    'student affair',
-    'members',
-    'treasurer',
-    'secretaris',
-    'president',
-    'vice president',
-    'teacher',
-    'admin',
-    'sekretaris 1',
-    'sekretaris 2',
-    'treasurer 1',
-    'treasurer 2',
+    'Superadmin',
+    'Admin',
+    'President',
+    'Vice President',
+    'Secretary',
+    'Treasurer',
+    'Member',
+    'Principal',
+    'Vice Principal',
+    'Student Affair',
+    'Teacher',
+    'Student'
   ];
   const roles: Record<string, any> = {};
   for (const name of roleNames) {
-    roles[name] = await prisma.role.upsert({
+    roles[name.toLowerCase()] = await prisma.role.upsert({
       where: { rolename: name },
       update: {},
       create: { rolename: name },
@@ -98,6 +95,10 @@ async function main() {
       majorname: 'Rekayasa Perangkat Lunak',
       majorcode: 'RPL',
     },
+    {
+      majorname: 'Sekolah Menengah Pertama',
+      majorcode: 'SMP',
+    },
   ];
   const majors: Record<string, any> = {};
   for (const data of majorData) {
@@ -109,26 +110,19 @@ async function main() {
   }
 
   console.log('Seeding classes...');
-  // The user requested classes where classname is exactly 'A':
-  // A (Grade: VIII, Major: AKL)
-  // A (Grade: VIII, Major: BDP)
-  // A (Grade: VIII, Major: RPL)
-  // A (Grade: IX, Major: AKL)
-  // A (Grade: IX, Major: BDP)
-  // A (Grade: IX, Major: RPL)
-  // A (Grade: XI, Major: AKL)
-  // A (Grade: XI, Major: BDP)
-  // A (Grade: XI, Major: RPL)
   const classDefinitions = [
-    { classname: 'A', gradeName: 'VIII', majorCode: 'AKL' },
-    { classname: 'A', gradeName: 'VIII', majorCode: 'BDP' },
-    { classname: 'A', gradeName: 'VIII', majorCode: 'RPL' },
-    { classname: 'A', gradeName: 'IX', majorCode: 'AKL' },
-    { classname: 'A', gradeName: 'IX', majorCode: 'BDP' },
-    { classname: 'A', gradeName: 'IX', majorCode: 'RPL' },
+    { classname: 'A', gradeName: 'VII', majorCode: 'SMP' },
+    { classname: 'A', gradeName: 'VIII', majorCode: 'SMP' },
+    { classname: 'A', gradeName: 'IX', majorCode: 'SMP' },
+    { classname: 'A', gradeName: 'X', majorCode: 'AKL' },
+    { classname: 'A', gradeName: 'X', majorCode: 'BDP' },
+    { classname: 'A', gradeName: 'X', majorCode: 'RPL' },
     { classname: 'A', gradeName: 'XI', majorCode: 'AKL' },
     { classname: 'A', gradeName: 'XI', majorCode: 'BDP' },
     { classname: 'A', gradeName: 'XI', majorCode: 'RPL' },
+    { classname: 'A', gradeName: 'XII', majorCode: 'AKL' },
+    { classname: 'A', gradeName: 'XII', majorCode: 'BDP' },
+    { classname: 'A', gradeName: 'XII', majorCode: 'RPL' },
   ];
 
   const seededClasses: any[] = [];
@@ -277,7 +271,7 @@ async function main() {
   await seedSingleSchoolUser('teacher', 'teacher@example.com', roles['teacher'].id);
   await seedSingleSchoolUser('admin', 'admin@example.com', roles['admin'].id);
   await seedSingleSchoolUser('principal', 'principal@example.com', roles['principal'].id);
-  await seedSingleSchoolUser('viceprincipal', 'viceprincipal@example.com', roles['viceprincipal'].id);
+  await seedSingleSchoolUser('viceprincipal', 'viceprincipal@example.com', roles['vice principal'].id);
   await seedSingleSchoolUser('studentaffair', 'studentaffair@example.com', roles['student affair'].id);
   await seedSingleSchoolUser('school', 'school@example.com', roles['principal'].id);
 
@@ -293,11 +287,11 @@ async function main() {
   });
   await prisma.employer.upsert({
     where: { email: 'employer@example.com' },
-    update: { userid: employerUser.id, roleid: roles['members'].id },
+    update: { userid: employerUser.id, roleid: roles['member'].id },
     create: {
       userid: employerUser.id,
       email: 'employer@example.com',
-      roleid: roles['members'].id,
+      roleid: roles['member'].id,
     },
   });
 

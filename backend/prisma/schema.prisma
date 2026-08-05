@@ -209,17 +209,137 @@ model Vote {
 }
 
 model Proker {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  targetDate  String
-  status      String
-  periodId    String
-  candidateId String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String          @id @default(uuid())
+  name           String
+  description    String?
+  targetDate     String
+  status         String
+  periodId       String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  // Relationships
+  proposals      Proposal[]
+  reports        Report[]
+  meetings       Meeting[]
+  divisions      Division[]
+  members        ProkerMember[]
+  documentations Documentation[]
 
   @@map("prokers")
+}
+
+model Proposal {
+  id        String   @id @default(uuid())
+  title     String
+  fileUrl   String
+  fileName  String?
+  fileSize  String?
+  status    String   // 'Diajukan', 'Disetujui', 'Ditolak' or 'Submitted', 'Approved', 'Rejected'
+  reason    String?
+  prokerId  String
+  createdAt String?
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  proker    Proker   @relation(fields: [prokerId], references: [id], onDelete: Cascade)
+
+  @@map("proposals")
+}
+
+model Report {
+  id        String   @id @default(uuid())
+  title     String
+  summary   String?
+  fileUrl   String
+  fileName  String?
+  fileSize  String?
+  status    String   // 'Diajukan', 'Disetujui', 'Ditolak' or 'Submitted', 'Approved', 'Rejected'
+  reason    String?
+  prokerId  String
+  createdAt String?
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  proker    Proker   @relation(fields: [prokerId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}
+
+model Meeting {
+  id          String       @id @default(uuid())
+  title       String
+  date        String
+  description String?
+  prokerId    String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relationships
+  proker      Proker       @relation(fields: [prokerId], references: [id], onDelete: Cascade)
+  attendances Attendance[]
+
+  @@map("meetings")
+}
+
+model Division {
+  id        String         @id @default(uuid())
+  name      String
+  prokerId  String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  // Relationships
+  proker    Proker         @relation(fields: [prokerId], references: [id], onDelete: Cascade)
+  members   ProkerMember[]
+
+  @@map("divisions")
+}
+
+model ProkerMember {
+  id          String       @id @default(uuid())
+  name        String
+  role        String       // 'Koordinator', 'Anggota' or 'Coordinator', 'Member'
+  divisionId  String
+  prokerId    String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relationships
+  proker      Proker       @relation(fields: [prokerId], references: [id], onDelete: Cascade)
+  division    Division     @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+
+  @@map("proker_members")
+}
+
+model Attendance {
+  id             String             @id @default(uuid())
+  meetingId      String
+  orgMemberId    String
+  status         String             // PRESENT, ABSENT
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  // Relationships
+  meeting        Meeting            @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  orgMember      OrganizationMember @relation(fields: [orgMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, orgMemberId])
+  @@map("attendances")
+}
+
+model Documentation {
+  id        String   @id @default(uuid())
+  title     String
+  imageUrl  String
+  prokerId  String
+  createdAt String?
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  proker    Proker   @relation(fields: [prokerId], references: [id], onDelete: Cascade)
+
+  @@map("documentations")
 }
 
 model Section {
@@ -244,10 +364,11 @@ model OrganizationMember {
   deletedAt DateTime?
 
   // Relationships
-  student   Student   @relation(fields: [studentid], references: [id], onDelete: Cascade)
-  role      Role      @relation(fields: [roleid], references: [id])
-  period    Period    @relation(fields: [periodid], references: [id], onDelete: Cascade)
-  section   Section?  @relation(fields: [sectionid], references: [id])
+  student     Student      @relation(fields: [studentid], references: [id], onDelete: Cascade)
+  role        Role         @relation(fields: [roleid], references: [id])
+  period      Period       @relation(fields: [periodid], references: [id], onDelete: Cascade)
+  section     Section?     @relation(fields: [sectionid], references: [id])
+  attendances Attendance[]
 
   @@unique([studentid, periodid])
   @@map("organization_members")

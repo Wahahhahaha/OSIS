@@ -29,6 +29,18 @@ api.interceptors.request.use(
   }
 );
 
+// Add a response interceptor to intercept HTTP errors globally
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status;
+    if (status && [403, 419, 500].includes(status)) {
+      window.location.href = `/error?code=${status}`;
+    }
+    return Promise.reject(error);
+  }
+);
+
 export interface LoginResponse {
   accessToken: string;
   user: {
@@ -213,6 +225,18 @@ export const authApi = {
   },
   setElectedPair: async (periodId: string, candidateId: string | null): Promise<any> => {
     const response = await api.post(`/admin/periods/${periodId}/elected-pair`, { candidateId });
+    return response.data;
+  },
+  getProkerDetails: async (id: string): Promise<any> => {
+    const response = await api.get(`/admin/prokers/${id}/details`);
+    return response.data;
+  },
+  updateProkerDetails: async (id: string, data: any): Promise<any> => {
+    const response = await api.put(`/admin/prokers/${id}/details`, data);
+    return response.data;
+  },
+  scanAttendance: async (meetingId: string, memberId: string): Promise<any> => {
+    const response = await api.post('/admin/prokers/attendance/scan', { meetingId, memberId });
     return response.data;
   },
 

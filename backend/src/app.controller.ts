@@ -445,12 +445,12 @@ export class AppController {
 
         if (!presidentRole) {
           presidentRole = await this.prisma.role.create({
-            data: { rolename: 'president' }
+            data: { rolename: 'President' }
           });
         }
         if (!vicePresidentRole) {
           vicePresidentRole = await this.prisma.role.create({
-            data: { rolename: 'vice president' }
+            data: { rolename: 'Vice President' }
           });
         }
 
@@ -1345,9 +1345,311 @@ export class AppController {
     }
 
     return this.prisma.proker.findMany({
+      include: {
+        proposals: true,
+        meetings: {
+          include: {
+            attendances: true
+          }
+        },
+        divisions: true,
+        members: true,
+        reports: true,
+        documentations: true
+      },
       orderBy: { createdAt: 'desc' }
     });
   }
+
+  @Get('admin/prokers/:id/details')
+  @UseGuards(JwtAuthGuard)
+  async getProkerDetails(@Param('id') id: string) {
+    const proker = await this.prisma.proker.findUnique({
+      where: { id }
+    });
+    if (!proker) {
+      throw new BadRequestException('Program kerja tidak ditemukan');
+    }
+
+    let proposals = await this.prisma.proposal.findMany({ where: { prokerId: id } });
+    let meetings = await this.prisma.meeting.findMany({ where: { prokerId: id } });
+    let divisions = await this.prisma.division.findMany({ where: { prokerId: id } });
+    let members = await this.prisma.prokerMember.findMany({ where: { prokerId: id } });
+    let reports = await this.prisma.report.findMany({ where: { prokerId: id } });
+    let documentations = await this.prisma.documentation.findMany({ where: { prokerId: id } });
+    let attendancesList = await this.prisma.attendance.findMany({
+      where: { meeting: { prokerId: id } }
+    });
+
+    const hasAnyDetails = proposals.length > 0 || meetings.length > 0 || divisions.length > 0 || members.length > 0 || reports.length > 0 || documentations.length > 0;
+
+    if (!hasAnyDetails) {
+      // Seed default details on-the-fly
+      await this.prisma.$transaction(async (tx) => {
+        await tx.proposal.create({
+          data: {
+            id: 'prop-1',
+            title: `Proposal Kegiatan ${proker.name}`,
+            status: 'Diajukan',
+            fileUrl: 'https://docs.google.com/document/d/example',
+            createdAt: new Date().toLocaleDateString('id-ID'),
+            prokerId: id
+          }
+        });
+        await tx.meeting.create({
+          data: {
+            id: 'meet-1',
+            title: 'Rapat Persiapan Awal',
+            date: proker.targetDate,
+            description: 'Membahas konsep dan pembentukan panitia.',
+            prokerId: id
+          }
+        });
+        await tx.division.createMany({
+          data: [
+            { id: 'div-1', name: 'Divisi Acara', prokerId: id },
+            { id: 'div-2', name: 'Divisi Humas & Dokumentasi', prokerId: id },
+            { id: 'div-3', name: 'Divisi Perlengkapan', prokerId: id }
+          ]
+        });
+        await tx.prokerMember.createMany({
+          data: [
+            { id: 'mem-1', name: 'Alif Rahman', role: 'Koordinator', divisionId: 'div-1', prokerId: id },
+            { id: 'mem-2', name: 'Clara Sinta', role: 'Anggota', divisionId: 'div-1', prokerId: id },
+            { id: 'mem-3', name: 'Rian Dwi', role: 'Koordinator', divisionId: 'div-2', prokerId: id },
+            { id: 'mem-4', name: 'Fadel Tri', role: 'Koordinator', divisionId: 'div-3', prokerId: id }
+          ]
+        });
+        const periodOrgMembers = await tx.organizationMember.findMany({
+          where: { periodid: proker.periodId }
+        });
+        const attendanceData = periodOrgMembers.map((om, idx) => ({
+          meetingId: 'meet-1',
+          orgMemberId: om.id,
+          status: idx % 2 === 0 ? 'PRESENT' : 'ABSENT'
+        }));
+        if (attendanceData.length > 0) {
+          await tx.attendance.createMany({
+            data: attendanceData
+          });
+        }
+      });
+
+      // Refetch
+      proposals = await this.prisma.proposal.findMany({ where: { prokerId: id } });
+      meetings = await this.prisma.meeting.findMany({ where: { prokerId: id } });
+      divisions = await this.prisma.division.findMany({ where: { prokerId: id } });
+      members = await this.prisma.prokerMember.findMany({ where: { prokerId: id } });
+      reports = await this.prisma.report.findMany({ where: { prokerId: id } });
+      documentations = await this.prisma.documentation.findMany({ where: { prokerId: id } });
+      attendancesList = await this.prisma.attendance.findMany({
+        where: { meeting: { prokerId: id } }
+      });
+    }
+
+    const attendances: Record<string, Record<string, string>> = {};
+    for (const att of attendancesList) {
+      if (!attendances[att.meetingId]) {
+        attendances[att.meetingId] = {};
+      }
+      attendances[att.meetingId][att.orgMemberId] = att.status;
+    }
+
+    return {
+      proposals,
+      meetings,
+      divisions,
+      members,
+      reports,
+      documentations,
+      attendances
+    };
+  }
+
+  @Put('admin/prokers/:id/details')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('superadmin', 'president', 'vice president', 'treasurer', 'secretaris')
+  async updateProkerDetails(@Param('id') id: string, @Body() body: any) {
+    const proker = await this.prisma.proker.findUnique({
+      where: { id }
+    });
+    if (!proker) {
+      throw new BadRequestException('Program kerja tidak ditemukan');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Deletes
+      await tx.attendance.deleteMany({
+        where: { meeting: { prokerId: id } }
+      });
+      await tx.meeting.deleteMany({ where: { prokerId: id } });
+      await tx.prokerMember.deleteMany({ where: { prokerId: id } });
+      await tx.division.deleteMany({ where: { prokerId: id } });
+      await tx.proposal.deleteMany({ where: { prokerId: id } });
+      await tx.report.deleteMany({ where: { prokerId: id } });
+      await tx.documentation.deleteMany({ where: { prokerId: id } });
+
+      // Inserts
+      if (body.divisions && body.divisions.length > 0) {
+        await tx.division.createMany({
+          data: body.divisions.map(d => ({
+            id: d.id,
+            name: d.name,
+            prokerId: id
+          }))
+        });
+      }
+
+      if (body.members && body.members.length > 0) {
+        await tx.prokerMember.createMany({
+          data: body.members.map(m => ({
+            id: m.id,
+            name: m.name,
+            role: m.role,
+            divisionId: m.divisionId,
+            prokerId: id
+          }))
+        });
+      }
+
+      if (body.meetings && body.meetings.length > 0) {
+        await tx.meeting.createMany({
+          data: body.meetings.map(m => ({
+            id: m.id,
+            title: m.title,
+            date: m.date,
+            description: m.description || null,
+            prokerId: id
+          }))
+        });
+      }
+
+      if (body.attendances) {
+        const attendanceData: any[] = [];
+        for (const [meetingId, memberMap] of Object.entries(body.attendances)) {
+          if (typeof memberMap === 'object' && memberMap !== null) {
+            for (const [memberId, status] of Object.entries(memberMap)) {
+              attendanceData.push({
+                meetingId,
+                orgMemberId: memberId,
+                status: status as string
+              });
+            }
+          }
+        }
+        if (attendanceData.length > 0) {
+          await tx.attendance.createMany({
+            data: attendanceData
+          });
+        }
+      }
+
+      if (body.proposals && body.proposals.length > 0) {
+        await tx.proposal.createMany({
+          data: body.proposals.map(p => ({
+            id: p.id,
+            title: p.title,
+            fileUrl: p.fileUrl,
+            fileName: p.fileName || null,
+            fileSize: p.fileSize ? String(p.fileSize) : null,
+            status: p.status,
+            reason: p.reason || null,
+            createdAt: p.createdAt || null,
+            prokerId: id
+          }))
+        });
+      }
+
+      if (body.reports && body.reports.length > 0) {
+        await tx.report.createMany({
+          data: body.reports.map(r => ({
+            id: r.id,
+            title: r.title,
+            summary: r.summary || null,
+            fileUrl: r.fileUrl,
+            fileName: r.fileName || null,
+            fileSize: r.fileSize ? String(r.fileSize) : null,
+            status: r.status,
+            reason: r.reason || null,
+            createdAt: r.createdAt || null,
+            prokerId: id
+          }))
+        });
+      }
+
+      if (body.documentations && body.documentations.length > 0) {
+        await tx.documentation.createMany({
+          data: body.documentations.map(d => ({
+            id: d.id,
+            title: d.title,
+            imageUrl: d.imageUrl,
+            createdAt: d.createdAt || null,
+            prokerId: id
+          }))
+        });
+      }
+    });
+
+    return { success: true };
+  }
+
+  @Post('admin/prokers/attendance/scan')
+  @UseGuards(JwtAuthGuard)
+  async scanAttendance(@Body() body: { meetingId: string; memberId: string }) {
+    const { meetingId, memberId } = body;
+    if (!meetingId || !memberId) {
+      throw new BadRequestException('Data scan tidak lengkap');
+    }
+
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { proker: true }
+    });
+    if (!meeting) {
+      throw new BadRequestException('Rapat tidak ditemukan');
+    }
+
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { id: memberId },
+      include: {
+        student: {
+          include: {
+            user: true
+          }
+        }
+      }
+    });
+    if (!member) {
+      throw new BadRequestException('Anggota organisasi tidak ditemukan');
+    }
+
+    const attendance = await this.prisma.attendance.upsert({
+      where: {
+        meetingId_orgMemberId: {
+          meetingId,
+          orgMemberId: memberId
+        }
+      },
+      create: {
+        meetingId,
+        orgMemberId: memberId,
+        status: 'PRESENT'
+      },
+      update: {
+        status: 'PRESENT'
+      }
+    });
+
+    const memberName = member.student?.user?.username || '-';
+
+    return {
+      success: true,
+      memberName,
+      meetingTitle: meeting.title,
+      prokerName: meeting.proker.name
+    };
+  }
+
 
   @Post('admin/prokers')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -1359,8 +1661,7 @@ export class AppController {
         description: body.description || null,
         targetDate: body.targetDate,
         status: body.status,
-        periodId: body.periodId,
-        candidateId: body.candidateId || null
+        periodId: body.periodId
       }
     });
   }
@@ -1398,8 +1699,7 @@ export class AppController {
         description: body.description || null,
         targetDate: body.targetDate,
         status: body.status,
-        periodId: body.periodId,
-        candidateId: body.candidateId || null
+        periodId: body.periodId
       }
     });
   }
@@ -1972,7 +2272,7 @@ export class AppController {
       const r = (roleName || '').trim().toLowerCase();
       if (!r) return 'student';
 
-      if (r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris 1' || r === 'sekretaris 2') {
+      if (r === 'secretary' || r === 'secretaris' || r === 'sekretaris' || r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris 1' || r === 'sekretaris 2') {
         return 'secretaris';
       }
 

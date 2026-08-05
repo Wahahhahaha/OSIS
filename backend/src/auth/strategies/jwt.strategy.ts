@@ -21,7 +21,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const r = (roleName || '').trim().toLowerCase();
     if (!r) return 'student';
 
-    if (r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris 1' || r === 'sekretaris 2') {
+    if (r === 'secretary' || r === 'secretaris' || r === 'sekretaris' || r === 'secretary 1' || r === 'secretary 2' || r === 'sekretaris 1' || r === 'sekretaris 2') {
       return 'secretaris';
     }
 

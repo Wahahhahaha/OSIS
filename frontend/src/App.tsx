@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { 
   Lock, 
   User as UserIcon, 
@@ -35,7 +35,13 @@ import {
   UserPlus,
   CheckSquare,
   Image as ImageIcon,
-  TrendingUp
+  TrendingUp,
+  QrCode,
+  Scan,
+  AlertCircle,
+  LogIn,
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { authApi } from './api';
 import type { SystemResponse } from './api';
@@ -101,7 +107,7 @@ const Dashboard = () => {
     if (path === '/activity-log') return 'activity-log';
     if (path === '/recycle-bin') return 'recycle-bin';
     if (path === '/permissions') return 'permissions';
-    return 'dashboard';
+    return 'error-404';
   };
   const activeMenu = getActiveMenuFromPath(location.pathname);
   const [isManageDataOpen, setIsManageDataOpen] = useState<boolean>(() => {
@@ -243,9 +249,16 @@ const Dashboard = () => {
   const [dragActive, setDragActive] = useState<boolean>(false);
   const [selectedReportFile, setSelectedReportFile] = useState<{ name: string; size: string; dataUrl: string } | null>(null);
   const [reportDragActive, setReportDragActive] = useState<boolean>(false);
+  const [selectedDocFile, setSelectedDocFile] = useState<{ name: string; size: string; dataUrl: string } | null>(null);
+  const [docDragActive, setDocDragActive] = useState<boolean>(false);
+  const [docInputMethod, setDocInputMethod] = useState<'file' | 'link'>('file');
   const [showAbsensiAddMeeting, setShowAbsensiAddMeeting] = useState<boolean>(false);
   const [faviconDragActive, setFaviconDragActive] = useState<boolean>(false);
   const [logoDragActive, setLogoDragActive] = useState<boolean>(false);
+  const [activeQrMember, setActiveQrMember] = useState<{ memberId: string; memberName: string; meetingId: string; meetingTitle: string } | null>(null);
+  const [showScanner, setShowScanner] = useState<boolean>(false);
+  const [scannerResult, setScannerResult] = useState<{ memberName: string; meetingTitle: string; prokerName: string } | null>(null);
+  const [scannerError, setScannerError] = useState<string | null>(null);
   const [prokerSubData, setProkerSubData] = useState<any>({
     proposals: [],
     meetings: [],
@@ -719,6 +732,11 @@ const Dashboard = () => {
     if (activeMenu === 'permissions') {
       loadAllPermissions();
     }
+    if (activeMenu === 'evaluasi-kinerja') {
+      loadProkersData();
+      loadPeriodsData();
+      loadOrgMembersData();
+    }
   }, [activeMenu, userData]);
 
   useEffect(() => {
@@ -737,50 +755,29 @@ const Dashboard = () => {
   }, [location.pathname, location.search, prokers, selectedProkerDetail, activeMenu]);
 
   useEffect(() => {
-    if (activeMenu === 'proker-detail' && selectedProkerDetail) {
-      const saved = localStorage.getItem(`osis_proker_details_${selectedProkerDetail.id}`);
-      if (saved) {
-        setProkerSubData(JSON.parse(saved));
-      } else {
-        const defaultData = {
-          proposals: [
-            { id: 'prop-1', title: `Proposal Kegiatan ${selectedProkerDetail.name}`, status: 'Diajukan', fileUrl: 'https://docs.google.com/document/d/example', createdAt: new Date().toLocaleDateString('id-ID') }
-          ],
-          meetings: [
-            { id: 'meet-1', title: 'Rapat Persiapan Awal', date: selectedProkerDetail.targetDate, description: 'Membahas konsep dan pembentukan panitia.' }
-          ],
-          divisions: [
-            { id: 'div-1', name: 'Divisi Acara' },
-            { id: 'div-2', name: 'Divisi Humas & Dokumentasi' },
-            { id: 'div-3', name: 'Divisi Perlengkapan' }
-          ],
-          members: [
-            { id: 'mem-1', divisionId: 'div-1', name: 'Alif Rahman', role: 'Koordinator' },
-            { id: 'mem-2', divisionId: 'div-1', name: 'Clara Sinta', role: 'Anggota' },
-            { id: 'mem-3', divisionId: 'div-2', name: 'Rian Dwi', role: 'Koordinator' },
-            { id: 'mem-4', divisionId: 'div-3', name: 'Fadel Tri', role: 'Koordinator' }
-          ],
-          attendances: {
-            'meet-1': {
-              'mem-1': 'PRESENT',
-              'mem-2': 'PRESENT',
-              'mem-3': 'SICK',
-              'mem-4': 'ABSENT'
-            }
-          },
-          reports: [],
-          documentations: []
-        };
-        setProkerSubData(defaultData);
-        localStorage.setItem(`osis_proker_details_${selectedProkerDetail.id}`, JSON.stringify(defaultData));
+    const loadDetails = async () => {
+      if (activeMenu === 'proker-detail' && selectedProkerDetail) {
+        try {
+          const details = await authApi.getProkerDetails(selectedProkerDetail.id);
+          setProkerSubData(details);
+        } catch (err) {
+          console.error('Error loading proker details:', err);
+          showToast('Failed to load work program details.');
+        }
       }
-    }
+    };
+    loadDetails();
   }, [activeMenu, selectedProkerDetail]);
 
-  const updateProkerSubData = (newData: any) => {
+  const updateProkerSubData = async (newData: any) => {
     if (!selectedProkerDetail) return;
     setProkerSubData(newData);
-    localStorage.setItem(`osis_proker_details_${selectedProkerDetail.id}`, JSON.stringify(newData));
+    try {
+      await authApi.updateProkerDetails(selectedProkerDetail.id, newData);
+    } catch (err) {
+      console.error('Error updating proker details:', err);
+      showToast('Failed to save changes to server.');
+    }
   };
 
   const loadKasData = async (m?: number, y?: number) => {
@@ -801,10 +798,10 @@ const Dashboard = () => {
 
   const handleRecordKasPayment = async (classId: string, classname: string, requiredAmount: number) => {
     const monthNames = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
     ];
-    const confirmPay = window.confirm(`Apakah Anda yakin ingin menandai kelas ${classname} sudah bayar kas sebesar Rp ${requiredAmount.toLocaleString('id-ID')} untuk bulan ${monthNames[kasMonth - 1]} ${kasYear}? Tindakan ini tidak dapat dibatalkan dan uang akan langsung masuk.`);
+    const confirmPay = window.confirm(`Are you sure you want to mark class ${classname} as paid for OSIS cash of IDR ${requiredAmount.toLocaleString('en-US')} for ${monthNames[kasMonth - 1]} ${kasYear}? This action cannot be undone and cash will be recorded.`);
     if (!confirmPay) return;
     
     try {
@@ -812,7 +809,7 @@ const Dashboard = () => {
       loadKasData(kasMonth, kasYear);
     } catch (err: any) {
       console.error(err);
-      alert(err.response?.data?.message || 'Gagal merekam pembayaran kas.');
+      alert(err.response?.data?.message || 'Failed to record cash payment.');
     }
   };
 
@@ -1608,22 +1605,22 @@ const Dashboard = () => {
       setSelectedVicePresidentId('');
       setActiveModal(null);
       loadCandidatesData();
-      showToast('Kandidat baru berhasil ditambahkan!');
+      showToast('New candidate successfully added!');
     } catch (err) {
       console.error(err);
-      alert('Gagal menambahkan kandidat');
+      alert('Failed to add candidate');
     }
   };
 
   const handleDeleteCandidate = async (id: string) => {
-    if (!window.confirm('Yakin ingin menghapus kandidat ini?')) return;
+    if (!window.confirm('Are you sure you want to delete this candidate?')) return;
     try {
       await authApi.deleteCandidate(id);
       loadCandidatesData();
-      showToast('Kandidat berhasil dihapus!');
+      showToast('Candidate successfully deleted!');
     } catch (err) {
       console.error(err);
-      alert('Gagal menghapus kandidat');
+      alert('Failed to delete candidate');
     }
   };
 
@@ -1643,7 +1640,7 @@ const Dashboard = () => {
   const handleEditCandidate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPresidentId || !selectedVicePresidentId || !newCandidatePeriodId) {
-      alert('Presiden, Wakil Presiden, dan Periode wajib dipilih.');
+      alert('President, Vice President, and Period must be selected.');
       return;
     }
     const presUser = users.find(u => u.id === selectedPresidentId);
@@ -1678,16 +1675,16 @@ const Dashboard = () => {
       setEditingItem(null);
       setActiveModal(null);
       loadCandidatesData();
-      showToast('Kandidat berhasil diperbarui!');
+      showToast('Candidate successfully updated!');
     } catch (err) {
       console.error(err);
-      alert('Gagal mengedit kandidat');
+      alert('Failed to edit candidate');
     }
   };
   const handleAddProker = async (e: React.FormEvent, activePeriodId: string) => {
     e.preventDefault();
     if (!prokerName.trim() || !prokerTargetDate.trim()) {
-      alert('Nama program dan Target pelaksanaan wajib diisi.');
+      alert('Program name and Target timeline are required.');
       return;
     }
     try {
@@ -1696,8 +1693,7 @@ const Dashboard = () => {
         description: prokerDesc,
         targetDate: prokerTargetDate,
         status: prokerStatus,
-        periodId: activePeriodId,
-        candidateId: selectedProkerCandidate?.id || null
+        periodId: activePeriodId
       });
       setProkerName('');
       setProkerDesc('');
@@ -1705,17 +1701,17 @@ const Dashboard = () => {
       setProkerStatus('Rencana');
       setActiveModal(null);
       loadProkersData();
-      showToast('Program kerja OSIS berhasil ditambahkan!');
+      showToast('OSIS work program successfully added!');
     } catch (err) {
       console.error(err);
-      alert('Gagal menambahkan program kerja');
+      alert('Failed to add work program');
     }
   };
 
   const handleEditProker = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prokerName.trim() || !prokerTargetDate.trim() || !editingItem) {
-      alert('Nama program dan Target pelaksanaan wajib diisi.');
+      alert('Program name and Target timeline are required.');
       return;
     }
     try {
@@ -1724,8 +1720,7 @@ const Dashboard = () => {
         description: prokerDesc,
         targetDate: prokerTargetDate,
         status: prokerStatus,
-        periodId: editingItem.periodId,
-        candidateId: editingItem.candidateId || selectedProkerCandidate?.id || null
+        periodId: editingItem.periodId
       });
       setEditingItem(null);
       setProkerName('');
@@ -1734,10 +1729,10 @@ const Dashboard = () => {
       setProkerStatus('Rencana');
       setActiveModal(null);
       loadProkersData();
-      showToast('Program kerja OSIS berhasil diperbarui!');
+      showToast('OSIS work program successfully updated!');
     } catch (err: any) {
       console.error(err);
-      alert(err.response?.data?.message || 'Gagal mengedit program kerja');
+      alert(err.response?.data?.message || 'Failed to edit work program');
     }
   };
 
@@ -1751,14 +1746,14 @@ const Dashboard = () => {
   };
 
   const handleDeleteProker = async (id: string) => {
-    if (!window.confirm('Yakin ingin menghapus program kerja ini?')) return;
+    if (!window.confirm('Are you sure you want to delete this work program?')) return;
     try {
       await authApi.deleteProker(id);
       loadProkersData();
-      showToast('Program kerja OSIS berhasil dihapus!');
+      showToast('OSIS work program successfully deleted!');
     } catch (err: any) {
       console.error(err);
-      alert(err.response?.data?.message || 'Gagal menghapus program kerja');
+      alert(err.response?.data?.message || 'Failed to delete work program');
     }
   };
 
@@ -1934,6 +1929,7 @@ const Dashboard = () => {
 
   const normalizedUserRole = normalizeRoleForAccess(userData?.role || '');
   const effectivePermissions = myPermissions.length > 0 ? myPermissions : getDefaultPermissionsForRole(normalizedUserRole);
+  const canScanAttendance = ['superadmin', 'admin', 'president', 'vice president', 'student affair'].includes(normalizedUserRole);
   const getGradeLevelNumber = (gradeName: string) => {
     const normalized = (gradeName || '').trim().toUpperCase();
     const romanMap: Record<string, number> = {
@@ -1977,6 +1973,9 @@ const Dashboard = () => {
 
   const renderActiveView = () => {
     switch (activeMenu) {
+      case 'error-404': {
+        return <ErrorPage embedded={true} code="404" message="The page you are looking for does not exist in this portal. Please check the address or use the sidebar to navigate." />;
+      }
       case 'permissions': {
         const formatPermissionRoleLabel = (roleKey: string) => {
           const normalized = roleKey.trim().toLowerCase();
@@ -2122,18 +2121,18 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Nama Kelas</th>
-                      <th>Tingkat</th>
-                      <th>Jurusan</th>
-                      <th>Dihapus Pada</th>
-                      <th style={{ textAlign: 'center' }}>Aksi</th>
+                      <th>Class Name</th>
+                      <th>Grade / Level</th>
+                      <th>Major</th>
+                      <th>Deleted At</th>
+                      <th style={{ textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.classes.length === 0 ? (
                       <tr>
                         <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Recycle bin kelas kosong.
+                          Class recycle bin is empty.
                         </td>
                       </tr>
                     ) : (
@@ -2142,7 +2141,7 @@ const Dashboard = () => {
                           <td style={{ fontWeight: 700 }}>{item.classname}</td>
                           <td>{item.grade?.gradename || '-'}</td>
                           <td>{item.major?.majorname || '-'}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('id-ID')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('class', item.id)}
@@ -2163,23 +2162,23 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Nama Tingkat</th>
-                      <th>Dihapus Pada</th>
-                      <th style={{ textAlign: 'center' }}>Aksi</th>
+                      <th>Grade Name</th>
+                      <th>Deleted At</th>
+                      <th style={{ textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.grades.length === 0 ? (
                       <tr>
                         <td colSpan={3} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Recycle bin tingkat kosong.
+                          Grade recycle bin is empty.
                         </td>
                       </tr>
                     ) : (
                       bin.grades.map((item: any) => (
                         <tr key={item.id}>
                           <td style={{ fontWeight: 700 }}>{item.gradename}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('id-ID')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('grade', item.id)}
@@ -2200,17 +2199,17 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Nama Jurusan</th>
-                      <th>Kode Jurusan</th>
-                      <th>Dihapus Pada</th>
-                      <th style={{ textAlign: 'center' }}>Aksi</th>
+                      <th>Major Name</th>
+                      <th>Major Code</th>
+                      <th>Deleted At</th>
+                      <th style={{ textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.majors.length === 0 ? (
                       <tr>
                         <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Recycle bin jurusan kosong.
+                          Major recycle bin is empty.
                         </td>
                       </tr>
                     ) : (
@@ -2218,7 +2217,7 @@ const Dashboard = () => {
                         <tr key={item.id}>
                           <td style={{ fontWeight: 700 }}>{item.majorname}</td>
                           <td style={{ fontWeight: 600 }}>{item.majorcode}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('id-ID')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('major', item.id)}
@@ -2242,17 +2241,17 @@ const Dashboard = () => {
                       <th>Username</th>
                       <th>Level</th>
                       <th>Email</th>
-                      <th>Jabatan / Role</th>
-                      <th>Kelas</th>
-                      <th>Dihapus Pada</th>
-                      <th style={{ textAlign: 'center' }}>Aksi</th>
+                      <th>Role / Position</th>
+                      <th>Class</th>
+                      <th>Deleted At</th>
+                      <th style={{ textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.users.length === 0 ? (
                       <tr>
                         <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Recycle bin user kosong.
+                          User recycle bin is empty.
                         </td>
                       </tr>
                     ) : (
@@ -2267,7 +2266,7 @@ const Dashboard = () => {
                           <td>{item.email}</td>
                           <td>{item.role}</td>
                           <td>{item.classname}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('id-ID')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('user', item.id)}
@@ -2288,23 +2287,23 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Nama Peran (Role)</th>
-                      <th>Dihapus Pada</th>
-                      <th style={{ textAlign: 'center' }}>Aksi</th>
+                      <th>Role Name</th>
+                      <th>Deleted At</th>
+                      <th style={{ textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.roles.length === 0 ? (
                       <tr>
                         <td colSpan={3} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Recycle bin peran kosong.
+                          Role recycle bin is empty.
                         </td>
                       </tr>
                     ) : (
                       bin.roles.map((item: any) => (
                         <tr key={item.id}>
                           <td style={{ fontWeight: 700 }}>{item.rolename}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('id-ID')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('role', item.id)}
@@ -2325,23 +2324,23 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Nama Divisi (Section)</th>
-                      <th>Dihapus Pada</th>
-                      <th style={{ textAlign: 'center' }}>Aksi</th>
+                      <th>Section Name</th>
+                      <th>Deleted At</th>
+                      <th style={{ textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.sections.length === 0 ? (
                       <tr>
                         <td colSpan={3} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Recycle bin divisi kosong.
+                          Section recycle bin is empty.
                         </td>
                       </tr>
                     ) : (
                       bin.sections.map((item: any) => (
                         <tr key={item.id}>
                           <td style={{ fontWeight: 700 }}>{item.sectionname}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('id-ID')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('section', item.id)}
@@ -2367,22 +2366,22 @@ const Dashboard = () => {
             <div>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Folder size={20} color="var(--secondary-blue)" />
-                Recycle Bin (Data Terhapus)
+                Recycle Bin (Deleted Data)
               </h2>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0', textAlign: 'left' }}>
-                Pulihkan data dari bagian Kelola Data yang sebelumnya telah dihapus dari sistem.
+                Restore previously deleted OSIS metadata or configuration items back into active datasets.
               </p>
             </div>
 
             {/* Segmented Tab Selectors */}
             <div style={{ display: 'flex', background: 'var(--bg-soft-white)', padding: '4px', borderRadius: '8px', border: '1px solid var(--card-border)', overflowX: 'auto', gap: '4px' }}>
               {[
-                { id: 'class', label: 'Kelas' },
-                { id: 'grade', label: 'Tingkat' },
-                { id: 'major', label: 'Jurusan' },
-                { id: 'user', label: 'Akun / User' },
-                { id: 'role', label: 'Peran (Role)' },
-                { id: 'section', label: 'Divisi (Section)' }
+                { id: 'class', label: 'Class' },
+                { id: 'grade', label: 'Grade' },
+                { id: 'major', label: 'Major' },
+                { id: 'user', label: 'User Account' },
+                { id: 'role', label: 'Role' },
+                { id: 'section', label: 'Section' }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -2411,7 +2410,7 @@ const Dashboard = () => {
             <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto', paddingBottom: '16px' }}>
               {recycleBinLoading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                  Memuat data terhapus...
+                  Loading deleted data...
                 </div>
               ) : (
                 renderTabContent()
@@ -2598,16 +2597,25 @@ const Dashboard = () => {
 
         // Loop through periodProkers to retrieve their details from localStorage
         const prokerDetailsList = periodProkers.map(p => {
-          const key = `osis_proker_details_${p.id}`;
-          const saved = localStorage.getItem(key);
-          const subData = saved ? JSON.parse(saved) : {
-            proposals: [],
-            meetings: [],
-            divisions: [],
-            members: [],
-            attendances: {},
-            reports: [],
-            documentations: []
+          const attendances: Record<string, Record<string, string>> = {};
+          if (p.meetings) {
+            p.meetings.forEach((meet: any) => {
+              if (meet.attendances) {
+                attendances[meet.id] = {};
+                meet.attendances.forEach((att: any) => {
+                  attendances[meet.id][att.prokerMemberId] = att.status;
+                });
+              }
+            });
+          }
+          const subData = {
+            proposals: p.proposals || [],
+            meetings: p.meetings || [],
+            divisions: p.divisions || [],
+            members: p.members || [],
+            attendances,
+            reports: p.reports || [],
+            documentations: p.documentations || []
           };
           return {
             proker: p,
@@ -2724,12 +2732,12 @@ const Dashboard = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                 <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                   <TrendingUp size={20} color="var(--secondary-blue)" />
-                  Evaluasi Kinerja OSIS
+                  OSIS Board Performance Evaluation
                 </h2>
                 
                 {/* Period Selector Dropdown */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Periode:</span>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Period:</span>
                   <select
                     className="form-input"
                     style={{ width: '140px', margin: 0, paddingLeft: '12px', paddingRight: '12px', paddingTop: 0, paddingBottom: 0, height: '36px', fontSize: '13px' }}
@@ -2747,39 +2755,39 @@ const Dashboard = () => {
             {/* KPI Metric Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.04) 0%, transparent 100%)' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Kehadiran Rata-Rata</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Average Attendance</span>
                 <h3 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--success)', margin: 0 }}>{overallAttendanceRate}%</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Dari total absensi rapat proker</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>From total meeting attendances</span>
               </div>
               
               <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.04) 0%, transparent 100%)' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Realisasi Proker</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Work Program Realization</span>
                 <h3 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--secondary-blue)', margin: 0 }}>{completionRate}%</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{completedProkers} dari {totalProkers} proker selesai</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{completedProkers} of {totalProkers} programs completed</span>
               </div>
 
               <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, transparent 100%)' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Kepatuhan Berkas</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Document Compliance</span>
                 <h3 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--warning)', margin: 0 }}>{docComplianceRate}%</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Persetujuan Proposal & LPJ</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Proposal & LPJ Approvals</span>
               </div>
 
               <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Total Rapat OSIS</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Total OSIS Meetings</span>
                 <h3 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--primary-navy)', margin: 0 }}>{totalMeetings}</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Rapat koordinasi & teknis</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Coordination & technical sessions</span>
               </div>
             </div>
 
             {/* Member Performance Evaluation Table */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--primary-navy)', margin: 0 }}>Tabel Kinerja & Kehadiran Pengurus</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--primary-navy)', margin: 0 }}>Board Performance & Attendance Registry</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-soft-white)', border: '1px solid var(--card-border)', borderRadius: '6px', padding: '6px 12px', width: '260px' }}>
                   <Search size={14} color="var(--text-muted)" />
                   <input
                     type="text"
-                    placeholder="Cari pengurus..."
+                    placeholder="Search board member..."
                     style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', width: '100%', padding: 0 }}
                     value={evalSearch}
                     onChange={e => setEvalSearch(e.target.value)}
@@ -2791,19 +2799,19 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Nama Pengurus</th>
-                      <th>Jabatan</th>
-                      <th>Divisi</th>
-                      <th style={{ textAlign: 'center' }}>Hadir / Total Rapat</th>
-                      <th style={{ textAlign: 'center' }}>Rasio Kehadiran</th>
-                      <th style={{ textAlign: 'center' }}>Predikat</th>
+                      <th>Officer Name</th>
+                      <th>Position</th>
+                      <th>Division</th>
+                      <th style={{ textAlign: 'center' }}>Attended / Total Meetings</th>
+                      <th style={{ textAlign: 'center' }}>Attendance Rate</th>
+                      <th style={{ textAlign: 'center' }}>Grade / Predicate</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredMembers.length === 0 ? (
                       <tr>
                         <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Tidak ada data kinerja pengurus OSIS.
+                          No board performance data available.
                         </td>
                       </tr>
                     ) : (
@@ -2863,11 +2871,11 @@ const Dashboard = () => {
 
             {/* Proker Evaluation Card Section */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--primary-navy)', margin: 0 }}>Evaluasi Dokumen & Agenda Program Kerja</h3>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--primary-navy)', margin: 0 }}>Document & Work Program Agenda Evaluation</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
                 {prokerDetailsList.length === 0 ? (
                   <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '24px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '8px' }}>
-                    Belum ada program kerja yang disusun.
+                    No work programs have been structured yet.
                   </div>
                 ) : (
                   prokerDetailsList.map(({ proker, subData }) => {
@@ -2883,25 +2891,25 @@ const Dashboard = () => {
                             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Target: {proker.targetDate}</span>
                           </div>
                           <span className={`badge badge-${proker.status === 'Selesai' ? 'success' : proker.status === 'Berjalan' ? 'warning' : 'secondary'}`} style={{ color: proker.status === 'Selesai' ? 'var(--success)' : proker.status === 'Berjalan' ? 'var(--warning)' : 'var(--text-muted)', padding: '2px 8px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>
-                            {proker.status}
+                            {proker.status === 'Selesai' ? 'Completed' : proker.status === 'Berjalan' ? 'In Progress' : 'Planned'}
                           </span>
                         </div>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'var(--bg-soft-white)', padding: '8px 12px', borderRadius: '6px', fontSize: '12.5px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>Total Rapat:</span>
-                            <span style={{ fontWeight: 600 }}>{totalMeetingsCount} Kali</span>
+                            <span style={{ color: 'var(--text-muted)' }}>Total Meetings:</span>
+                            <span style={{ fontWeight: 600 }}>{totalMeetingsCount} Times</span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>Proposal Kegiatan:</span>
+                            <span style={{ color: 'var(--text-muted)' }}>Activity Proposal:</span>
                             <span style={{ fontWeight: 700, color: hasProp ? 'var(--success)' : 'var(--danger)' }}>
-                              {hasProp ? '✓ Disetujui' : '✗ Belum Disetujui'}
+                              {hasProp ? '✓ Approved' : '✗ Not Approved'}
                             </span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>Laporan LPJ:</span>
+                            <span style={{ color: 'var(--text-muted)' }}>LPJ Report:</span>
                             <span style={{ fontWeight: 700, color: hasRep ? 'var(--success)' : 'var(--danger)' }}>
-                              {hasRep ? '✓ Disetujui' : '✗ Belum Disetujui'}
+                              {hasRep ? '✓ Approved' : '✗ Not Approved'}
                             </span>
                           </div>
                         </div>
@@ -2922,7 +2930,7 @@ const Dashboard = () => {
             <div className="theme-card profile-card">
               <h2 className="profile-card-title">
                 {getLevelIcon(userData.level)}
-                Informasi Akun
+                Account Information
               </h2>
 
               <div className="profile-fields">
@@ -2932,7 +2940,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className="profile-field">
-                  <div className="profile-label">Level Akses</div>
+                  <div className="profile-label">Access Level</div>
                   <div>
                     <span className={getBadgeClass(userData.level)}>
                       {userData.level}
@@ -2941,7 +2949,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className="profile-field">
-                  <div className="profile-label">Email Terdaftar</div>
+                  <div className="profile-label">Registered Email</div>
                   <div className="profile-value" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Mail size={16} className="text-muted" />
                     {userData.email || '-'}
@@ -2949,7 +2957,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className="profile-field">
-                  <div className="profile-label">Role Jabatan</div>
+                  <div className="profile-label">Role / Position</div>
                   <div className="profile-value" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Award size={16} className="text-muted" />
                     <span style={{ textTransform: 'capitalize' }}>{userData.role || '-'}</span>
@@ -2962,13 +2970,13 @@ const Dashboard = () => {
             <div className="theme-card details-card">
               <h2 className="profile-card-title">
                 <BookOpen size={20} color="var(--secondary-blue)" />
-                Detail Level
+                Level Details
               </h2>
 
               {userData.level === 'student' && userData.details && (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <div className="detail-item">
-                    <span className="detail-name">Kelas</span>
+                    <span className="detail-name">Class</span>
                     <span className="detail-val">{userData.details.class}</span>
                   </div>
                   <div className="detail-item">
@@ -2976,28 +2984,28 @@ const Dashboard = () => {
                     <span className="detail-val">{userData.details.grade}</span>
                   </div>
                   <div className="detail-item">
-                    <span className="detail-name">Jurusan</span>
+                    <span className="detail-name">Major</span>
                     <span className="detail-val">{userData.details.major}</span>
                   </div>
                 </div>
               )}
 
               {userData.level === 'student' && !userData.details && (
-                <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Data detail siswa tidak ditemukan.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Student detail data not found.</p>
               )}
 
               {userData.level === 'school' && (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '16px' }}>
-                    Level akun ini memiliki wewenang administrasi sekolah.
+                    This account level has school administrative authority.
                   </p>
                   <div className="detail-item">
-                    <span className="detail-name">Institusi</span>
-                    <span className="detail-val">Lembaga Sekolah</span>
+                    <span className="detail-name">Institution</span>
+                    <span className="detail-val">School Institution</span>
                   </div>
                   <div className="detail-item">
                     <span className="detail-name">Status</span>
-                    <span className="detail-val" style={{ color: 'var(--success)' }}>Aktif</span>
+                    <span className="detail-val" style={{ color: 'var(--success)' }}>Active</span>
                   </div>
                 </div>
               )}
@@ -3005,19 +3013,56 @@ const Dashboard = () => {
               {userData.level === 'employer' && (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '16px' }}>
-                    Level akun ini diperuntukkan bagi instansi pemberi kerja / industri mitra.
+                    This account level is designated for employers / partner industries.
                   </p>
                   <div className="detail-item">
-                    <span className="detail-name">Kemitraan</span>
-                    <span className="detail-val">Industri & Dunia Kerja</span>
+                    <span className="detail-name">Partnership</span>
+                    <span className="detail-val">Industry & Labor Market</span>
                   </div>
                   <div className="detail-item">
                     <span className="detail-name">Status</span>
-                    <span className="detail-val" style={{ color: 'var(--success)' }}>Aktif</span>
+                    <span className="detail-val" style={{ color: 'var(--success)' }}>Active</span>
                   </div>
                 </div>
               )}
             </div>
+
+            {/* Quick Actions & Attendance Scanner Card */}
+            {canScanAttendance && (
+              <div className="theme-card details-card" style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column' }}>
+                <h2 className="profile-card-title">
+                  <Scan size={20} color="var(--secondary-blue)" />
+                  OSIS Quick Actions
+                </h2>
+                <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                  Perform administrative actions and scan attendance code.
+                </p>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <button 
+                    onClick={() => setShowScanner(true)}
+                    className="btn-primary-sm"
+                    style={{
+                      height: '42px',
+                      padding: '0 24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      background: 'linear-gradient(135deg, var(--secondary-blue), #1d4ed8)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <Scan size={16} /> Scan Attendance QR Code
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         );
 
@@ -3387,7 +3432,7 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Users size={20} color="var(--secondary-blue)" />
-                Kandidat Ketua & Wakil Ketua OSIS
+                OSIS Chairperson & Vice Chairperson Candidates
               </h2>
               {userData.role === 'superadmin' && (
                 <button onClick={() => {
@@ -3402,13 +3447,13 @@ const Dashboard = () => {
                   setEditingItem(null);
                   setActiveModal('add-candidate');
                 }} className="btn-primary-sm">
-                  <Plus size={16} /> Tambah Kandidat
+                  <Plus size={16} /> Add Candidate
                 </button>
               )}
             </div>
             
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              Daftar pasangan calon OSIS yang sedang bersaing dalam pemilihan periode aktif.
+              List of OSIS candidate pairs competing in the active election period.
             </p>
 
             {/* Filter & Search Bar */}
@@ -3418,7 +3463,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Cari nama calon, kelas, visi..." 
+                  placeholder="Search candidate name, class, vision..." 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={candidateSearch}
                   onChange={e => setCandidateSearch(e.target.value)}
@@ -3431,7 +3476,7 @@ const Dashboard = () => {
                 value={candidatePeriodFilter}
                 onChange={e => setCandidatePeriodFilter(e.target.value)}
               >
-                <option value="">Semua Periode</option>
+                <option value="">All Periods</option>
                 {periods.map(p => (
                   <option key={p.id} value={p.id}>{p.yearLabel}</option>
                 ))}
@@ -3454,18 +3499,18 @@ const Dashboard = () => {
                       <div style={{ flexGrow: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', paddingRight: userData.role === 'superadmin' ? '50px' : '0' }}>
                           <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', background: 'rgba(37,99,235,0.08)', color: 'var(--secondary-blue)', borderRadius: '6px' }}>
-                            PASLON {c.paslonNo}
+                            PAIR {c.paslonNo}
                           </span>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Periode {periodLabel}
+                            Period {periodLabel}
                           </span>
                         </div>
                         <h3 style={{ margin: '0 0 4px', fontSize: '16px', color: 'var(--primary-navy)', fontWeight: 700 }}>{c.name}</h3>
                         <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{c.classes}</p>
                         
                         <div style={{ fontSize: '12px', borderTop: '1px solid var(--card-border)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div><strong>Visi:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.visi}</span></div>
-                          {c.misi && <div><strong>Misi:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.misi}</span></div>}
+                          <div><strong>Vision:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.visi}</span></div>
+                          {c.misi && <div><strong>Mission:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.misi}</span></div>}
                         </div>
     
                         {userData.role === 'superadmin' && (
@@ -3474,7 +3519,7 @@ const Dashboard = () => {
                               onClick={() => handleStartEditCandidate(c)} 
                               className="action-btn action-btn-warning" 
                               style={{ padding: '4px 8px' }}
-                              title="Edit Kandidat"
+                              title="Edit Candidate"
                             >
                               <Edit2 size={12} />
                             </button>
@@ -3482,7 +3527,7 @@ const Dashboard = () => {
                               onClick={() => handleDeleteCandidate(c.id)} 
                               className="action-btn action-btn-danger" 
                               style={{ padding: '4px 8px' }}
-                              title="Hapus Kandidat"
+                              title="Delete Candidate"
                             >
                               <Trash2 size={12} />
                             </button>
@@ -3494,7 +3539,7 @@ const Dashboard = () => {
                 })}
                 {filteredCandidates.length === 0 && (
                   <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '40px', color: 'var(--text-muted)', width: '100%' }}>
-                    Tidak ada data kandidat yang cocok dengan pencarian Anda.
+                    No candidate data matches your search.
                   </div>
                 )}
               </div>
@@ -3524,11 +3569,9 @@ const Dashboard = () => {
 
         const hasOfficers = presidentName || vicePresidentName;
 
-        const periodProkers = selectedProkerPeriod ? prokers.filter(p => {
-          const matchesPeriod = p.periodId === selectedProkerPeriod.id;
-          const matchesCandidate = selectedProkerCandidate ? (p.candidateId === selectedProkerCandidate.id || !p.candidateId) : true;
-          return matchesPeriod && matchesCandidate;
-        }) : [];
+        const periodProkers = selectedProkerPeriod 
+          ? prokers.filter(p => p.periodId === selectedProkerPeriod.id) 
+          : [];
 
         const getChronologicalValue = (targetDate: string) => {
           const months = ['jan', 'feb', 'mar', 'apr', 'mei', 'jun', 'jul', 'agu', 'sep', 'okt', 'nov', 'des'];
@@ -3562,12 +3605,12 @@ const Dashboard = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                 <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                   <Briefcase size={20} color="var(--secondary-blue)" />
-                  Program Kerja OSIS
+                  OSIS Work Programs
                 </h2>
                 
                 {/* Period Selector Dropdown */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Periode:</span>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Period:</span>
                   <select
                     className="form-input"
                     style={{ width: '140px', margin: 0, paddingLeft: '12px', paddingRight: '12px', paddingTop: 0, paddingBottom: 0, height: '36px', fontSize: '13px' }}
@@ -3595,7 +3638,7 @@ const Dashboard = () => {
                     className="btn-primary-sm"
                     style={{ padding: '8px 16px', height: '36px', display: 'flex', alignItems: 'center', gap: '6px' }}
                   >
-                    <Plus size={16} /> Tambah Proker
+                    <Plus size={16} /> Add Program
                   </button>
                 )}
               </div>
@@ -3604,32 +3647,32 @@ const Dashboard = () => {
               {/* Proker Statistics */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
                 <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Program</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Programs</span>
                   <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--primary-navy)' }}>{totalPro}</h4>
                 </div>
                 <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Rencana</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Planned</span>
                   <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--text-muted)' }}>{rencanaPro}</h4>
                 </div>
                 <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Sedang Berjalan</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>In Progress</span>
                   <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--warning)' }}>{berjalanPro}</h4>
                 </div>
                 <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Selesai</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Completed</span>
                   <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--success)' }}>{selesaiPro}</h4>
                 </div>
               </div>
 
               {/* List of Prokers */}
               <h3 style={{ fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700, margin: '10px 0 0' }}>
-                Daftar Rencana Program Kerja OSIS
+                OSIS Work Program Registry
               </h3>
 
               <div className="proker-timeline">
                 {sortedProkers.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '12px' }}>
-                    Belum ada program kerja yang disusun untuk periode ini.
+                    No work programs have been structured for this period yet.
                   </div>
                 ) : (
                   sortedProkers.map(p => {
@@ -3660,13 +3703,13 @@ const Dashboard = () => {
                               </span>
                               
                               {p.status === 'Rencana' && (
-                                <span className="badge badge-secondary" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px' }}>Rencana</span>
+                                <span className="badge badge-secondary" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px' }}>Planned</span>
                               )}
                               {p.status === 'Berjalan' && (
-                                <span className="badge badge-warning" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--warning)' }}>Berjalan</span>
+                                <span className="badge badge-warning" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--warning)' }}>In Progress</span>
                               )}
                               {p.status === 'Selesai' && (
-                                <span className="badge badge-success" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--success)' }}>Selesai</span>
+                                <span className="badge badge-success" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--success)' }}>Completed</span>
                               )}
                             </div>
                           </div>
@@ -3686,7 +3729,7 @@ const Dashboard = () => {
                                 }} 
                                 className="action-btn action-btn-warning"
                                 style={{ padding: '4px 8px' }}
-                                title="Edit Proker"
+                                title="Edit Program"
                                 type="button"
                               >
                                 <Edit2 size={12} />
@@ -3698,7 +3741,7 @@ const Dashboard = () => {
                                 }} 
                                 className="action-btn action-btn-danger"
                                 style={{ padding: '4px 8px' }}
-                                title="Hapus Proker"
+                                title="Delete Program"
                                 type="button"
                               >
                                 <Trash2 size={12} />
@@ -4223,18 +4266,83 @@ const Dashboard = () => {
           showToast('Status laporan berhasil diperbarui!');
         };
 
+        const handleDocFileSelection = (file: File) => {
+          const sizeMB = file.size / (1024 * 1024);
+          let sizeString = '';
+          if (sizeMB < 0.1) {
+            sizeString = (file.size / 1024).toFixed(1) + ' KB';
+          } else {
+            sizeString = sizeMB.toFixed(2) + ' MB';
+          }
+
+          if (sizeMB > 5.0) {
+            setSelectedDocFile({
+              name: file.name,
+              size: sizeString,
+              dataUrl: 'mock-file:large'
+            });
+            alert('File is too large (> 5MB). Image preview will not be loaded, but you can still submit.');
+          } else {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              setSelectedDocFile({
+                name: file.name,
+                size: sizeString,
+                dataUrl: event.target?.result as string
+              });
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+
+        const handleDocDrag = (e: React.DragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.type === "dragenter" || e.type === "dragover") {
+            setDocDragActive(true);
+          } else if (e.type === "dragleave") {
+            setDocDragActive(false);
+          }
+        };
+
+        const handleDocDrop = (e: React.DragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDocDragActive(false);
+          if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleDocFileSelection(e.dataTransfer.files[0]);
+          }
+        };
+
         const handleAddDocumentation = (e: React.FormEvent<HTMLFormElement>) => {
           e.preventDefault();
           const fd = new FormData(e.currentTarget);
           const title = fd.get('title') as string;
-          const imageUrl = fd.get('imageUrl') as string;
-          if (!title || !imageUrl) return;
+          if (!title) {
+            alert('Title is required.');
+            return;
+          }
+
+          let imageUrl = '';
+          if (docInputMethod === 'link') {
+            imageUrl = fd.get('imageUrl') as string;
+            if (!imageUrl) {
+              alert('Image URL is required.');
+              return;
+            }
+          } else {
+            if (!selectedDocFile) {
+              alert('Please select or drag an image file first.');
+              return;
+            }
+            imageUrl = selectedDocFile.dataUrl;
+          }
 
           const newDoc = {
             id: 'doc-' + Date.now(),
             title,
             imageUrl,
-            createdAt: new Date().toLocaleDateString('id-ID')
+            createdAt: new Date().toLocaleDateString('en-US')
           };
 
           updateProkerSubData({
@@ -4242,26 +4350,27 @@ const Dashboard = () => {
             documentations: [...(subData.documentations || []), newDoc]
           });
           e.currentTarget.reset();
-          showToast('Dokumentasi berhasil ditambahkan!');
+          setSelectedDocFile(null);
+          showToast('Documentation successfully added!');
         };
 
         const handleDeleteDocumentation = (id: string) => {
-          if (!window.confirm('Hapus dokumentasi ini?')) return;
+          if (!window.confirm('Delete this documentation?')) return;
           updateProkerSubData({
             ...subData,
             documentations: (subData.documentations || []).filter((x: any) => x.id !== id)
           });
-          showToast('Dokumentasi berhasil dihapus!');
+          showToast('Documentation successfully deleted!');
         };
 
         const tabs = [
           { key: 'overview', label: 'Overview', icon: <Info size={15} /> },
-          { key: 'document', label: 'Proposal & Laporan', icon: <FileText size={15} /> },
-          { key: 'rapat', label: 'Rapat', icon: <Users size={15} /> },
-          { key: 'divisi', label: 'Divisi', icon: <Folder size={15} /> },
-          { key: 'anggota', label: 'Anggota', icon: <UserPlus size={15} /> },
-          { key: 'absensi', label: 'Absensi', icon: <CheckSquare size={15} /> },
-          { key: 'dokumentasi', label: 'Dokumentasi', icon: <ImageIcon size={15} /> }
+          { key: 'document', label: 'Proposal & Reports', icon: <FileText size={15} /> },
+          { key: 'rapat', label: 'Meetings', icon: <Users size={15} /> },
+          { key: 'divisi', label: 'Divisions', icon: <Folder size={15} /> },
+          { key: 'anggota', label: 'Members', icon: <UserPlus size={15} /> },
+          { key: 'absensi', label: 'Attendance', icon: <CheckSquare size={15} /> },
+          { key: 'dokumentasi', label: 'Documentation', icon: <ImageIcon size={15} /> }
         ];
 
         return (
@@ -4272,7 +4381,7 @@ const Dashboard = () => {
                   onClick={() => navigate('/proker')} 
                   style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 600 }}
                 >
-                  <ArrowLeft size={16} /> Kembali
+                  <ArrowLeft size={16} /> Back
                 </button>
                 <div style={{ borderLeft: '1px solid var(--card-border)', height: '20px' }}></div>
                 <div>
@@ -4284,9 +4393,9 @@ const Dashboard = () => {
               </div>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Status Proker:</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Program Status:</span>
                 <span className={`badge badge-${p.status === 'Selesai' ? 'success' : p.status === 'Berjalan' ? 'warning' : 'secondary'}`} style={{ color: p.status === 'Selesai' ? 'var(--success)' : p.status === 'Berjalan' ? 'var(--warning)' : 'var(--text-muted)', padding: '4px 10px', fontSize: '12px', borderRadius: '6px' }}>
-                  {p.status}
+                  {p.status === 'Selesai' ? 'Completed' : p.status === 'Berjalan' ? 'In Progress' : 'Planned'}
                 </span>
               </div>
             </div>
@@ -4323,27 +4432,27 @@ const Dashboard = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                     <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Proposal Diajukan</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Proposals Submitted</span>
                       <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--secondary-blue)' }}>{subData.proposals?.length || 0}</h4>
                     </div>
                     <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Rencana Rapat</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Scheduled Meetings</span>
                       <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--warning)' }}>{subData.meetings?.length || 0}</h4>
                     </div>
                     <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Divisi Kepanitiaan</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Committee Divisions</span>
                       <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--primary-navy)' }}>{subData.divisions?.length || 0}</h4>
                     </div>
                     <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Jumlah Anggota</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Member Count</span>
                       <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--success)' }}>{subData.members?.length || 0}</h4>
                     </div>
                   </div>
 
                   <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', background: 'var(--bg-soft-white)' }}>
-                    <h3 style={{ fontSize: '15px', margin: '0 0 10px 0', color: 'var(--primary-navy)' }}>Deskripsi Kegiatan</h3>
+                    <h3 style={{ fontSize: '15px', margin: '0 0 10px 0', color: 'var(--primary-navy)' }}>Activity Description</h3>
                     <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.6', color: 'var(--text-dark)' }}>
-                      {p.description || 'Tidak ada deskripsi yang ditambahkan untuk program kerja ini.'}
+                      {p.description || 'No description added for this work program.'}
                     </p>
                   </div>
                 </div>
@@ -4368,7 +4477,7 @@ const Dashboard = () => {
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      Proposal Kegiatan
+                      Activity Proposal
                     </button>
                     <button
                       type="button"
@@ -4385,7 +4494,7 @@ const Dashboard = () => {
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      Laporan Pertanggungjawaban (LPJ)
+                      LPJ Report
                     </button>
                   </div>
 
@@ -4393,23 +4502,23 @@ const Dashboard = () => {
                     <>
                       {isSecretaryUser && proposalScheduleInfo && !proposalScheduleInfo.isPastEvent && proposalScheduleInfo.isInNotifyWindow && (
                         <div style={{ padding: '16px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--warning)' }}>Notifikasi Sekretaris</span>
+                          <span style={{ fontWeight: 700, color: 'var(--warning)' }}>Secretary Notification</span>
                           <span>
-                            Proposal untuk <strong>{p.name}</strong> akan dibuka untuk pengajuan saat masuk H-1 bulan sebelum acara.
+                            Proposal for <strong>{p.name}</strong> will be open for submission 1 month prior to the event date.
                           </span>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Sisa waktu menuju acara: <strong>{proposalScheduleInfo.daysToEvent} hari</strong>. Siapkan dokumen sekarang.
+                            Time remaining to event: <strong>{proposalScheduleInfo.daysToEvent} days</strong>. Please prepare the document.
                           </span>
                         </div>
                       )}
                       {isSecretaryUser && proposalScheduleInfo && proposalScheduleInfo.canSubmitProposal && (
                         <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.07)', border: '1px solid rgba(16, 185, 129, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--success)' }}>Proposal Sudah Bisa Dikirim</span>
+                          <span style={{ fontWeight: 700, color: 'var(--success)' }}>Proposal Submission Open</span>
                           <span>
-                            Sekarang sudah masuk periode H-1 bulan untuk <strong>{p.name}</strong>.
+                            The 1-month preparation window has started for <strong>{p.name}</strong>.
                           </span>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Proposal wajib dikirim sebelum acara dimulai.
+                            Proposal must be submitted before the event starts.
                           </span>
                         </div>
                       )}
@@ -4419,12 +4528,12 @@ const Dashboard = () => {
                           const activeProp = subData.proposals.find((x: any) => x.status === 'Diajukan' || x.status === 'Disetujui');
                           return (
                             <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                              <span style={{ fontWeight: 700, color: 'var(--success)' }}>✓ Proposal Aktif Ditemukan</span>
+                              <span style={{ fontWeight: 700, color: 'var(--success)' }}>✓ Active Proposal Found</span>
                               <span>
-                                Proposal dengan judul <strong>"{activeProp.title}"</strong> saat ini berstatus <strong>{activeProp.status}</strong>.
+                                Proposal titled <strong>"{activeProp.title}"</strong> is currently in <strong>{activeProp.status === 'Diajukan' ? 'Submitted' : 'Approved'}</strong> status.
                               </span>
                               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                Anda tidak dapat mengirimkan proposal baru kecuali proposal aktif ini ditolak oleh Pembina/Superadmin.
+                                You cannot submit a new proposal unless the active proposal is rejected by the Advisor/Superadmin.
                               </span>
                             </div>
                           );
@@ -4447,14 +4556,14 @@ const Dashboard = () => {
                             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', width: '100%' }}>
                               <div style={{ flex: 1, minWidth: '250px' }}>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>
-                                  Judul Proposal <span style={{ color: 'var(--danger)' }}>*</span>
+                                  Proposal Title <span style={{ color: 'var(--danger)' }}>*</span>
                                 </label>
                                 <input 
                                   name="title" 
                                   required 
                                   type="text" 
                                   className="form-input" 
-                                  placeholder="Masukkan judul proposal..." 
+                                  placeholder="Enter proposal title..." 
                                   style={{ margin: 0 }} 
                                 />
                               </div>
@@ -4462,7 +4571,7 @@ const Dashboard = () => {
 
                             <div style={{ width: '100%' }}>
                               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-dark)' }}>
-                                File Proposal (PDF, DOCX, dll) <span style={{ color: 'var(--danger)' }}>*</span>
+                                Proposal File (PDF, DOCX, etc.) <span style={{ color: 'var(--danger)' }}>*</span>
                               </label>
                               
                               <div
@@ -4513,16 +4622,16 @@ const Dashboard = () => {
                                       onClick={() => setSelectedProposalFile(null)}
                                       style={{ background: 'transparent', border: 'none', color: 'var(--danger)', fontWeight: 700, cursor: 'pointer', fontSize: '11px', padding: '4px' }}
                                     >
-                                      Ganti
+                                      Replace
                                     </button>
                                   </div>
                                 ) : (
                                   <div>
                                     <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)' }}>
-                                      Seret & taruh file proposal ke sini, atau klik untuk memilih
+                                      Drag & drop proposal file here, or click to browse
                                     </p>
                                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                      Rekomendasi ukuran berkas &lt; 1.5MB
+                                      Recommended file size &lt; 1.5MB
                                     </span>
                                   </div>
                                 )}
@@ -4536,7 +4645,7 @@ const Dashboard = () => {
                                 disabled={!!proposalScheduleInfo && !proposalScheduleInfo.canSubmitProposal}
                                 style={{ height: '38px', padding: '0 24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, opacity: proposalScheduleInfo && !proposalScheduleInfo.canSubmitProposal ? 0.6 : 1, cursor: proposalScheduleInfo && !proposalScheduleInfo.canSubmitProposal ? 'not-allowed' : 'pointer' }}
                               >
-                                <Plus size={16} /> Ajukan Proposal
+                                <Plus size={16} /> Submit Proposal
                               </button>
                             </div>
                           </form>
@@ -4547,18 +4656,18 @@ const Dashboard = () => {
                         <table className="admin-table">
                           <thead>
                             <tr>
-                              <th>Judul Proposal</th>
-                              <th>Tanggal Pengajuan</th>
-                              <th>Link Dokumen</th>
+                              <th>Proposal Title</th>
+                              <th>Submission Date</th>
+                              <th>Document Link</th>
                               <th>Status</th>
-                              {canModerateProkerDocs && <th style={{ textAlign: 'center', width: '150px' }}>Aksi</th>}
+                              {canModerateProkerDocs && <th style={{ textAlign: 'center', width: '150px' }}>Action</th>}
                             </tr>
                           </thead>
                           <tbody>
                             {!subData.proposals || subData.proposals.length === 0 ? (
                               <tr>
                                 <td colSpan={canModerateProkerDocs ? 5 : 4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                                  Belum ada proposal yang diajukan.
+                                  No proposals have been submitted yet.
                                 </td>
                               </tr>
                             ) : (
@@ -4574,27 +4683,27 @@ const Dashboard = () => {
                                           download={x.fileName || 'proposal.pdf'}
                                           style={{ color: 'var(--success)', textDecoration: 'underline', fontSize: '13px', fontWeight: 600 }}
                                         >
-                                          Unduh Berkas ({x.fileSize || '-'})
+                                          Download File ({x.fileSize || '-'})
                                         </a>
                                       ) : x.fileUrl.startsWith('mock-file:') ? (
                                         <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontStyle: 'italic' }}>
-                                          {x.fileName} ({x.fileSize}) [Ukuran Besar]
+                                          {x.fileName} ({x.fileSize}) [Large Size]
                                         </span>
                                       ) : (
-                                        <a href={x.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--secondary-blue)', textDecoration: 'underline', fontSize: '13px' }}>Buka Dokumen</a>
+                                        <a href={x.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--secondary-blue)', textDecoration: 'underline', fontSize: '13px' }}>Open Document</a>
                                       )
                                     ) : (
-                                      <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Tidak ada berkas</span>
+                                      <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No file</span>
                                     )}
                                   </td>
                                   <td>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                       <span className={`badge badge-${x.status === 'Disetujui' ? 'success' : x.status === 'Ditolak' ? 'danger' : 'warning'}`} style={{ width: 'fit-content', color: x.status === 'Disetujui' ? 'var(--success)' : x.status === 'Ditolak' ? 'var(--danger)' : 'var(--warning)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
-                                        {x.status}
+                                        {x.status === 'Disetujui' ? 'Approved' : x.status === 'Ditolak' ? 'Rejected' : 'Submitted'}
                                       </span>
                                       {x.status === 'Ditolak' && x.reason && (
                                         <span style={{ fontSize: '11px', color: 'var(--danger)', fontStyle: 'italic', maxWidth: '200px', whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                                          Alasan: {x.reason}
+                                          Reason: {x.reason}
                                         </span>
                                       )}
                                     </div>
@@ -4605,12 +4714,12 @@ const Dashboard = () => {
                                         {x.status !== 'Disetujui' && (
                                           <button
                                             onClick={() => {
-                                              if (window.confirm('Setujui proposal ini?')) {
+                                              if (window.confirm('Approve this proposal?')) {
                                                 updateProkerSubData({
                                                   ...subData,
                                                   proposals: subData.proposals.map((p: any) => p.id === x.id ? { ...p, status: 'Disetujui', reason: undefined } : p)
                                                 });
-                                                showToast('Proposal disetujui!');
+                                                showToast('Proposal approved!');
                                               }
                                             }}
                                             style={{
@@ -4630,7 +4739,7 @@ const Dashboard = () => {
                                             }}
                                             onMouseOver={e => { e.currentTarget.style.background = 'var(--success)'; e.currentTarget.style.color = '#ffffff'; }}
                                             onMouseOut={e => { e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'; e.currentTarget.style.color = 'var(--success)'; }}
-                                            title="Setujui Proposal"
+                                            title="Approve Proposal"
                                           >
                                             ✓
                                           </button>
@@ -4638,17 +4747,17 @@ const Dashboard = () => {
                                         {x.status !== 'Ditolak' && (
                                           <button
                                             onClick={() => {
-                                              const reason = window.prompt('Masukkan alasan penolakan proposal ini:');
+                                              const reason = window.prompt('Enter rejection reason for this proposal:');
                                               if (reason === null) return;
                                               if (!reason.trim()) {
-                                                alert('Alasan penolakan tidak boleh kosong.');
+                                                alert('Rejection reason cannot be empty.');
                                                 return;
                                               }
                                               updateProkerSubData({
                                                 ...subData,
                                                 proposals: subData.proposals.map((p: any) => p.id === x.id ? { ...p, status: 'Ditolak', reason } : p)
                                               });
-                                              showToast('Proposal ditolak!');
+                                              showToast('Proposal rejected!');
                                             }}
                                             style={{
                                               width: '24px',
@@ -4667,7 +4776,7 @@ const Dashboard = () => {
                                             }}
                                             onMouseOver={e => { e.currentTarget.style.background = 'var(--danger)'; e.currentTarget.style.color = '#ffffff'; }}
                                             onMouseOut={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = 'var(--danger)'; }}
-                                            title="Tolak Proposal"
+                                            title="Reject Proposal"
                                           >
                                             ✕
                                           </button>
@@ -4677,7 +4786,7 @@ const Dashboard = () => {
                                           style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', transition: 'color 0.15s' }}
                                           onMouseOver={e => e.currentTarget.style.color = 'var(--danger)'}
                                           onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                                          title="Hapus Proposal"
+                                          title="Delete Proposal"
                                         >
                                           <Trash2 size={15} />
                                         </button>
@@ -4696,28 +4805,28 @@ const Dashboard = () => {
                       {reportScheduleInfo && !reportScheduleInfo.isBeforeEvent && !reportScheduleInfo.isPastDeadline && (
                         <div style={{ padding: '16px', background: reportScheduleInfo.canSubmitReport ? 'rgba(16, 185, 129, 0.07)' : 'rgba(245, 158, 11, 0.08)', border: reportScheduleInfo.canSubmitReport ? '1px solid rgba(16, 185, 129, 0.22)' : '1px solid rgba(245, 158, 11, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
                           <span style={{ fontWeight: 700, color: reportScheduleInfo.canSubmitReport ? 'var(--success)' : 'var(--warning)' }}>
-                            {reportScheduleInfo.canSubmitReport ? 'Laporan Sudah Bisa Dikirim' : 'Menunggu Waktu Laporan'}
+                            {reportScheduleInfo.canSubmitReport ? 'Report Submission Open' : 'Pending Report Timeline'}
                           </span>
                           <span>
                             {reportScheduleInfo.canSubmitReport
-                              ? `Laporan untuk ${p.name} sedang dibuka dan wajib dikirim sebelum H+1 bulan.`
-                              : `Laporan untuk ${p.name} akan dibuka mulai H+1 hari setelah acara selesai.`}
+                              ? `LPJ report submission for ${p.name} is open and must be submitted before H+1 month.`
+                              : `LPJ report for ${p.name} will be open starting H+1 day after the event is finished.`}
                           </span>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                             {reportScheduleInfo.canSubmitReport
-                              ? `Sisa waktu menuju batas akhir: ${reportScheduleInfo.daysUntilDeadline} hari.`
-                              : `Sisa waktu menuju pembukaan laporan: ${reportScheduleInfo.daysSinceEvent <= 0 ? 1 : reportScheduleInfo.daysSinceEvent} hari.`}
+                              ? `Remaining time to deadline: ${reportScheduleInfo.daysUntilDeadline} days.`
+                              : `Time remaining to report opening: ${reportScheduleInfo.daysSinceEvent <= 0 ? 1 : reportScheduleInfo.daysSinceEvent} days.`}
                           </span>
                         </div>
                       )}
                       {reportScheduleInfo && reportScheduleInfo.isPastDeadline && (
                         <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.07)', border: '1px solid rgba(239, 68, 68, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--danger)' }}>Batas Laporan Terlewat</span>
+                          <span style={{ fontWeight: 700, color: 'var(--danger)' }}>Report Deadline Passed</span>
                           <span>
-                            Laporan untuk <strong>{p.name}</strong> sudah melewati H+1 bulan setelah acara.
+                            LPJ report for <strong>{p.name}</strong> has passed the H+1 month deadline post-event.
                           </span>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Pengiriman laporan ditutup otomatis setelah tenggat.
+                            Report submissions are automatically locked after the deadline.
                           </span>
                         </div>
                       )}
@@ -4727,12 +4836,12 @@ const Dashboard = () => {
                           const activeRep = subData.reports.find((x: any) => x.status === 'Diajukan' || x.status === 'Disetujui');
                           return (
                             <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                              <span style={{ fontWeight: 700, color: 'var(--success)' }}>✓ Laporan Aktif Ditemukan</span>
+                              <span style={{ fontWeight: 700, color: 'var(--success)' }}>✓ Active Report Found</span>
                               <span>
-                                Laporan dengan judul <strong>"{activeRep.title}"</strong> saat ini berstatus <strong>{activeRep.status}</strong>.
+                                Report titled <strong>"{activeRep.title}"</strong> is currently in <strong>{activeRep.status === 'Diajukan' ? 'Submitted' : 'Approved'}</strong> status.
                               </span>
                               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                Anda tidak dapat mengirimkan laporan baru kecuali laporan aktif ini ditolak oleh Pembina/Superadmin.
+                                You cannot submit a new report unless the active report is rejected by the Advisor/Superadmin.
                               </span>
                             </div>
                           );
@@ -4755,26 +4864,26 @@ const Dashboard = () => {
                             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', width: '100%' }}>
                               <div style={{ flex: 1, minWidth: '200px' }}>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>
-                                  Judul Laporan (LPJ) <span style={{ color: 'var(--danger)' }}>*</span>
+                                  Report Title (LPJ) <span style={{ color: 'var(--danger)' }}>*</span>
                                 </label>
                                 <input 
                                   name="title" 
                                   required 
                                   type="text" 
                                   className="form-input" 
-                                  placeholder="Laporan Pertanggungjawaban MPLS..." 
+                                  placeholder="MPLS LPJ Report..." 
                                   style={{ margin: 0 }} 
                                 />
                               </div>
                               <div style={{ flex: 2, minWidth: '250px' }}>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>
-                                  Ringkasan Hasil Kegiatan
+                                  Activity Results Summary
                                 </label>
                                 <input 
                                   name="summary" 
                                   type="text" 
                                   className="form-input" 
-                                  placeholder="Acara berjalan sukses dengan tingkat kehadiran panitia 95%..." 
+                                  placeholder="The event ran successfully with 95% committee attendance..." 
                                   style={{ margin: 0 }} 
                                 />
                               </div>
@@ -4782,7 +4891,7 @@ const Dashboard = () => {
 
                             <div style={{ width: '100%' }}>
                               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-dark)' }}>
-                                File Laporan LPJ (PDF, DOCX, dll) <span style={{ color: 'var(--danger)' }}>*</span>
+                                LPJ Report File (PDF, DOCX, etc.) <span style={{ color: 'var(--danger)' }}>*</span>
                               </label>
                               
                               <div
@@ -4833,16 +4942,16 @@ const Dashboard = () => {
                                       onClick={() => setSelectedReportFile(null)}
                                       style={{ background: 'transparent', border: 'none', color: 'var(--danger)', fontWeight: 700, cursor: 'pointer', fontSize: '11px', padding: '4px' }}
                                     >
-                                      Ganti
+                                      Replace
                                     </button>
                                   </div>
                                 ) : (
                                   <div>
                                     <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)' }}>
-                                      Seret & taruh file laporan ke sini, atau klik untuk memilih
+                                      Drag & drop report file here, or click to browse
                                     </p>
                                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                      Rekomendasi ukuran berkas &lt; 1.5MB
+                                      Recommended file size &lt; 1.5MB
                                     </span>
                                   </div>
                                 )}
@@ -4856,7 +4965,7 @@ const Dashboard = () => {
                                 disabled={!!reportScheduleInfo && !reportScheduleInfo.canSubmitReport}
                                 style={{ height: '38px', padding: '0 24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, opacity: reportScheduleInfo && !reportScheduleInfo.canSubmitReport ? 0.6 : 1, cursor: reportScheduleInfo && !reportScheduleInfo.canSubmitReport ? 'not-allowed' : 'pointer' }}
                               >
-                                <Plus size={16} /> Ajukan Laporan
+                                <Plus size={16} /> Submit Report
                               </button>
                             </div>
                           </form>
@@ -4867,19 +4976,19 @@ const Dashboard = () => {
                         <table className="admin-table">
                           <thead>
                             <tr>
-                              <th>Judul Laporan</th>
-                              <th>Ringkasan Hasil</th>
-                              <th>Tanggal Dibuat</th>
-                              <th>Link Laporan</th>
+                              <th>Report Title</th>
+                              <th>Results Summary</th>
+                              <th>Created Date</th>
+                              <th>Report Link</th>
                               <th>Status</th>
-                              {canModerateProkerDocs && <th style={{ textAlign: 'center', width: '150px' }}>Aksi</th>}
+                              {canModerateProkerDocs && <th style={{ textAlign: 'center', width: '150px' }}>Action</th>}
                             </tr>
                           </thead>
                           <tbody>
                             {!subData.reports || subData.reports.length === 0 ? (
                               <tr>
                                 <td colSpan={canModerateProkerDocs ? 6 : 5} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                                  Belum ada laporan pertanggungjawaban yang diajukan.
+                                  No LPJ reports have been submitted yet.
                                 </td>
                               </tr>
                             ) : (
@@ -4896,27 +5005,27 @@ const Dashboard = () => {
                                           download={x.fileName || 'laporan.pdf'}
                                           style={{ color: 'var(--success)', textDecoration: 'underline', fontSize: '13px', fontWeight: 600 }}
                                         >
-                                          Unduh Laporan ({x.fileSize || '-'})
+                                          Download Report ({x.fileSize || '-'})
                                         </a>
                                       ) : x.fileUrl.startsWith('mock-file:') ? (
                                         <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontStyle: 'italic' }}>
-                                          {x.fileName} ({x.fileSize}) [Ukuran Besar]
+                                          {x.fileName} ({x.fileSize}) [Large Size]
                                         </span>
                                       ) : (
-                                        <a href={x.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--secondary-blue)', textDecoration: 'underline', fontSize: '13px' }}>Buka Laporan</a>
+                                        <a href={x.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--secondary-blue)', textDecoration: 'underline', fontSize: '13px' }}>Open Report</a>
                                       )
                                     ) : (
-                                      <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Tidak ada berkas</span>
+                                      <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No file</span>
                                     )}
                                   </td>
                                   <td>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                       <span className={`badge badge-${x.status === 'Disetujui' ? 'success' : x.status === 'Ditolak' ? 'danger' : 'warning'}`} style={{ width: 'fit-content', color: x.status === 'Disetujui' ? 'var(--success)' : x.status === 'Ditolak' ? 'var(--danger)' : 'var(--warning)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
-                                        {x.status}
+                                        {x.status === 'Disetujui' ? 'Approved' : x.status === 'Ditolak' ? 'Rejected' : 'Submitted'}
                                       </span>
                                       {x.status === 'Ditolak' && x.reason && (
                                         <span style={{ fontSize: '11px', color: 'var(--danger)', fontStyle: 'italic', maxWidth: '200px', whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                                          Alasan: {x.reason}
+                                          Reason: {x.reason}
                                         </span>
                                       )}
                                     </div>
@@ -4927,12 +5036,12 @@ const Dashboard = () => {
                                         {x.status !== 'Disetujui' && (
                                           <button
                                             onClick={() => {
-                                              if (window.confirm('Setujui laporan ini?')) {
+                                              if (window.confirm('Approve this report?')) {
                                                 updateProkerSubData({
                                                   ...subData,
                                                   reports: subData.reports.map((p: any) => p.id === x.id ? { ...p, status: 'Disetujui', reason: undefined } : p)
                                                 });
-                                                showToast('Laporan disetujui!');
+                                                showToast('Report approved!');
                                               }
                                             }}
                                             style={{
@@ -4952,7 +5061,7 @@ const Dashboard = () => {
                                             }}
                                             onMouseOver={e => { e.currentTarget.style.background = 'var(--success)'; e.currentTarget.style.color = '#ffffff'; }}
                                             onMouseOut={e => { e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'; e.currentTarget.style.color = 'var(--success)'; }}
-                                            title="Setujui Laporan"
+                                            title="Approve Report"
                                           >
                                             ✓
                                           </button>
@@ -4960,17 +5069,17 @@ const Dashboard = () => {
                                         {x.status !== 'Ditolak' && (
                                           <button
                                             onClick={() => {
-                                              const reason = window.prompt('Masukkan alasan penolakan laporan ini:');
+                                              const reason = window.prompt('Enter rejection reason for this report:');
                                               if (reason === null) return;
                                               if (!reason.trim()) {
-                                                alert('Alasan penolakan tidak boleh kosong.');
+                                                alert('Rejection reason cannot be empty.');
                                                 return;
                                               }
                                               updateProkerSubData({
                                                 ...subData,
                                                 reports: subData.reports.map((p: any) => p.id === x.id ? { ...p, status: 'Ditolak', reason } : p)
                                               });
-                                              showToast('Laporan ditolak!');
+                                              showToast('Report rejected!');
                                             }}
                                             style={{
                                               width: '24px',
@@ -4989,7 +5098,7 @@ const Dashboard = () => {
                                             }}
                                             onMouseOver={e => { e.currentTarget.style.background = 'var(--danger)'; e.currentTarget.style.color = '#ffffff'; }}
                                             onMouseOut={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = 'var(--danger)'; }}
-                                            title="Tolak Laporan"
+                                            title="Reject Report"
                                           >
                                             ✕
                                           </button>
@@ -4999,7 +5108,7 @@ const Dashboard = () => {
                                           style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', transition: 'color 0.15s' }}
                                           onMouseOver={e => e.currentTarget.style.color = 'var(--danger)'}
                                           onMouseOut={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                                          title="Hapus Laporan"
+                                          title="Delete Report"
                                         >
                                           <Trash2 size={15} />
                                         </button>
@@ -5022,19 +5131,19 @@ const Dashboard = () => {
                   {canEditProkerDetails && (
                     <form onSubmit={handleAddMeeting} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
                       <div style={{ flex: 2, minWidth: '180px' }}>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Agenda Rapat</label>
-                        <input name="title" required type="text" className="form-input" placeholder="Pembahasan rundown..." style={{ margin: 0 }} />
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Meeting Agenda</label>
+                        <input name="title" required type="text" className="form-input" placeholder="Rundown discussion..." style={{ margin: 0 }} />
                       </div>
                       <div style={{ flex: 1, minWidth: '150px' }}>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Tanggal / Jam</label>
-                        <input name="date" required type="text" className="form-input" placeholder="10 Agustus, 13:00" style={{ margin: 0 }} />
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Date / Time</label>
+                        <input name="date" required type="text" className="form-input" placeholder="August 10, 13:00" style={{ margin: 0 }} />
                       </div>
                       <div style={{ flex: 2, minWidth: '180px' }}>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Deskripsi Rapat</label>
-                        <input name="description" type="text" className="form-input" placeholder="Tempat rapat, pembahasan detail..." style={{ margin: 0 }} />
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Meeting Description</label>
+                        <input name="description" type="text" className="form-input" placeholder="Meeting venue, detailed discussion..." style={{ margin: 0 }} />
                       </div>
                       <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Plus size={16} /> Jadwalkan
+                        <Plus size={16} /> Schedule
                       </button>
                     </form>
                   )}
@@ -5042,21 +5151,21 @@ const Dashboard = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {!subData.meetings || subData.meetings.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '8px' }}>
-                        Belum ada jadwal rapat panitia.
+                        No committee meetings have been scheduled yet.
                       </div>
                     ) : (
                       subData.meetings.map((x: any) => (
                         <div key={x.id} className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
                             <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--primary-navy)' }}>{x.title}</h4>
-                            <span style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>Waktu: {x.date}</span>
+                            <span style={{ fontSize: '12px', color: 'var(--warning)', fontWeight: 600 }}>Time: {x.date}</span>
                             {x.description && <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>{x.description}</p>}
                           </div>
                           {canEditProkerDetails && (
                             <button
                               onClick={() => handleDeleteMeeting(x.id)}
                               style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '6px' }}
-                              title="Hapus Rapat"
+                              title="Delete Meeting"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -5073,11 +5182,11 @@ const Dashboard = () => {
                   {canEditProkerDetails && (
                     <form onSubmit={handleAddDivision} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
                       <div style={{ flex: 1, minWidth: '220px' }}>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Nama Divisi Baru</label>
-                        <input name="name" required type="text" className="form-input" placeholder="Divisi Perlengkapan..." style={{ margin: 0 }} />
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>New Division Name</label>
+                        <input name="name" required type="text" className="form-input" placeholder="Equipment Division..." style={{ margin: 0 }} />
                       </div>
                       <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Plus size={16} /> Tambah Divisi
+                        <Plus size={16} /> Add Division
                       </button>
                     </form>
                   )}
@@ -5085,7 +5194,7 @@ const Dashboard = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
                     {!subData.divisions || subData.divisions.length === 0 ? (
                       <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '8px' }}>
-                        Belum ada divisi yang dibuat.
+                        No divisions have been created yet.
                       </div>
                     ) : (
                       subData.divisions.map((x: any) => {
@@ -5094,13 +5203,13 @@ const Dashboard = () => {
                           <div key={x.id} className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                               <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--primary-navy)' }}>{x.name}</h4>
-                              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{divMemberCount} Anggota</span>
+                              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{divMemberCount} Members</span>
                             </div>
                             {canEditProkerDetails && (
                               <button
                                 onClick={() => handleDeleteDivision(x.id)}
                                 style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
-                                title="Hapus Divisi"
+                                title="Delete Division"
                               >
                                 <Trash2 size={15} />
                               </button>
@@ -5118,23 +5227,23 @@ const Dashboard = () => {
                   {canEditProkerDetails && (subData.divisions?.length || 0) > 0 && (
                     <form onSubmit={handleAddMember} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
                       <div style={{ flex: 2, minWidth: '220px' }}>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Nama Anggota</label>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Member Name</label>
                         <select name="memberId" required className="form-input" style={{ margin: 0 }}>
-                          <option value="">-- Pilih Anggota Organisasi --</option>
+                          <option value="">-- Select Organization Member --</option>
                           {prokerEligibleMembers.map((m: any) => (
                             <option key={m.id} value={m.id}>{formatProkerMemberOptionLabel(m)}</option>
                           ))}
                         </select>
                       </div>
                       <div style={{ flex: 1, minWidth: '140px' }}>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Jabatan</label>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Position</label>
                         <select name="role" required className="form-input" style={{ margin: 0 }}>
-                          <option value="Koordinator">Koordinator</option>
-                          <option value="Anggota">Anggota</option>
+                          <option value="Koordinator">Coordinator</option>
+                          <option value="Anggota">Member</option>
                         </select>
                       </div>
                       <div style={{ flex: 2, minWidth: '180px' }}>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Divisi</label>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Division</label>
                         <select name="divisionId" required className="form-input" style={{ margin: 0 }}>
                           {(subData.divisions || []).map((d: any) => (
                             <option key={d.id} value={d.id}>{d.name}</option>
@@ -5142,7 +5251,7 @@ const Dashboard = () => {
                         </select>
                       </div>
                       <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }} disabled={prokerEligibleMembers.length === 0}>
-                        <Plus size={16} /> Tambah Anggota
+                        <Plus size={16} /> Add Member
                       </button>
                     </form>
                   )}
@@ -5151,17 +5260,17 @@ const Dashboard = () => {
                     <table className="admin-table">
                       <thead>
                         <tr>
-                          <th>Nama Anggota</th>
-                          <th>Divisi</th>
-                          <th>Jabatan</th>
-                          {canEditProkerDetails && <th style={{ textAlign: 'center', width: '100px' }}>Aksi</th>}
+                          <th>Member Name</th>
+                          <th>Division</th>
+                          <th>Position</th>
+                          {canEditProkerDetails && <th style={{ textAlign: 'center', width: '100px' }}>Action</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {!subData.members || subData.members.length === 0 ? (
                           <tr>
                             <td colSpan={canEditProkerDetails ? 4 : 3} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                              Belum ada anggota panitia yang ditambahkan.
+                              No committee members have been added yet.
                             </td>
                           </tr>
                         ) : (
@@ -5173,7 +5282,7 @@ const Dashboard = () => {
                                 <td>{div ? div.name : '-'}</td>
                                 <td>
                                   <span className={`badge badge-${x.role === 'Koordinator' ? 'primary' : 'secondary'}`} style={{ color: x.role === 'Koordinator' ? 'var(--secondary-blue)' : 'var(--text-muted)', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
-                                    {x.role}
+                                    {x.role === 'Koordinator' ? 'Coordinator' : 'Member'}
                                   </span>
                                 </td>
                                 {canEditProkerDetails && (
@@ -5181,7 +5290,7 @@ const Dashboard = () => {
                                     <button
                                       onClick={() => handleDeleteMember(x.id)}
                                       style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '2px' }}
-                                      title="Hapus"
+                                      title="Delete"
                                     >
                                       <Trash2 size={14} />
                                     </button>
@@ -5196,7 +5305,7 @@ const Dashboard = () => {
                   </div>
                   {canEditProkerDetails && (subData.divisions?.length || 0) > 0 && prokerEligibleMembers.length === 0 && (
                     <div style={{ padding: '14px 16px', borderRadius: '8px', border: '1px dashed var(--card-border)', color: 'var(--text-muted)', fontSize: '13px', background: 'var(--bg-soft-white)' }}>
-                      Tidak ada anggota organisasi yang cocok untuk periode ini.
+                      No organization members available for this period.
                     </div>
                   )}
                 </div>
@@ -5206,27 +5315,40 @@ const Dashboard = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', width: '100%' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Pilih Rapat:</span>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Select Meeting:</span>
                       <select
                         className="form-input"
                         style={{ width: '250px', margin: 0 }}
                         value={activeProkerMeetingId}
                         onChange={e => setActiveProkerMeetingId(e.target.value)}
                       >
-                        <option value="">-- Pilih Rapat --</option>
+                        <option value="">-- Select Meeting --</option>
                         {(subData.meetings || []).map((m: any) => (
                           <option key={m.id} value={m.id}>{m.title} ({m.date})</option>
                         ))}
                       </select>
                     </div>
-                    {canEditProkerDetails && (
-                      <button
-                        onClick={() => setShowAbsensiAddMeeting(!showAbsensiAddMeeting)}
-                        className="btn-primary-sm"
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px', padding: '0 16px', background: showAbsensiAddMeeting ? 'var(--text-muted)' : 'var(--secondary-blue)', border: 'none', borderRadius: '6px', color: '#ffffff', fontWeight: 700, cursor: 'pointer' }}
-                      >
-                        <Plus size={14} /> {showAbsensiAddMeeting ? 'Batal' : 'Jadwalkan Rapat Baru'}
-                      </button>
+                    {(canScanAttendance || canEditProkerDetails) && (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {canScanAttendance && activeProkerMeetingId && (
+                          <button
+                            onClick={() => setShowScanner(true)}
+                            className="btn-primary-sm"
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px', padding: '0 16px', background: 'var(--success)', border: 'none', borderRadius: '6px', color: '#ffffff', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            <Scan size={14} /> Scan QR Attendance
+                          </button>
+                        )}
+                        {canEditProkerDetails && (
+                          <button
+                            onClick={() => setShowAbsensiAddMeeting(!showAbsensiAddMeeting)}
+                            className="btn-primary-sm"
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '38px', padding: '0 16px', background: showAbsensiAddMeeting ? 'var(--text-muted)' : 'var(--secondary-blue)', border: 'none', borderRadius: '6px', color: '#ffffff', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            <Plus size={14} /> {showAbsensiAddMeeting ? 'Cancel' : 'Schedule New Meeting'}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -5247,21 +5369,21 @@ const Dashboard = () => {
                     >
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', width: '100%' }}>
                         <div style={{ flex: 2, minWidth: '180px' }}>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>Agenda Rapat</label>
-                          <input name="title" required type="text" className="form-input" placeholder="Pembahasan rundown kegiatan..." style={{ margin: 0 }} />
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>Meeting Agenda</label>
+                          <input name="title" required type="text" className="form-input" placeholder="Activity rundown discussion..." style={{ margin: 0 }} />
                         </div>
                         <div style={{ flex: 1.5, minWidth: '180px' }}>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>Tanggal & Jam</label>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>Date & Time</label>
                           <input name="date" required type="datetime-local" className="form-input" style={{ margin: 0 }} />
                         </div>
                         <div style={{ flex: 2, minWidth: '180px' }}>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>Tempat / Keterangan</label>
-                          <input name="description" type="text" className="form-input" placeholder="Ruang OSIS / Google Meet..." style={{ margin: 0 }} />
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>Venue / Info</label>
+                          <input name="description" type="text" className="form-input" placeholder="OSIS Room / Google Meet..." style={{ margin: 0 }} />
                         </div>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
                         <button type="submit" className="btn-primary-sm" style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '36px' }}>
-                          <Plus size={14} /> Simpan & Pilih Rapat
+                          <Plus size={14} /> Save & Select Meeting
                         </button>
                       </div>
                     </form>
@@ -5272,60 +5394,80 @@ const Dashboard = () => {
                       <table className="admin-table">
                         <thead>
                           <tr>
-                            <th>Nama Anggota</th>
-                            <th>Divisi</th>
-                            <th>Status Absensi</th>
+                            <th>Member Name</th>
+                            <th>Division</th>
+                            <th>Attendance Status</th>
+                            <th style={{ width: '100px', textAlign: 'center' }}>QR Code</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {!subData.members || subData.members.length === 0 ? (
+                          {!periodOrgMembers || periodOrgMembers.length === 0 ? (
                             <tr>
-                              <td colSpan={3} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                                Belum ada anggota panitia. Tambahkan anggota terlebih dahulu.
+                              <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                                No OSIS organization members available.
                               </td>
                             </tr>
                           ) : (
-                            subData.members.map((x: any) => {
-                              const div = (subData.divisions || []).find((d: any) => d.id === x.divisionId);
-                              const currentStatus = (subData.attendances[activeProkerMeetingId] || {})[x.id] || 'PRESENT';
+                            periodOrgMembers.map((x: any) => {
+                              const currentStatus = ((subData.attendances[activeProkerMeetingId] || {})[x.id] === 'PRESENT') ? 'PRESENT' : 'ABSENT';
+                              const studentName = x.student?.user?.username || x.student?.user?.fullName || x.student?.name || '-';
+                              const sectionName = x.section?.sectionname || 'Core Committee';
 
                               return (
                                 <tr key={x.id}>
-                                  <td style={{ fontWeight: 600 }}>{x.name}</td>
-                                  <td>{div ? div.name : '-'}</td>
+                                  <td style={{ fontWeight: 600 }}>{studentName}</td>
+                                  <td>{sectionName}</td>
                                   <td>
-                                    {canEditProkerDetails ? (
-                                      <div style={{ display: 'flex', gap: '6px' }}>
-                                        {[
-                                          { key: 'PRESENT', label: 'Hadir', bg: 'var(--success)' },
-                                          { key: 'SICK', label: 'Sakit', bg: 'var(--warning)' },
-                                          { key: 'PERMIT', label: 'Izin', bg: 'var(--secondary-blue)' },
-                                          { key: 'ABSENT', label: 'Alpa', bg: 'var(--danger)' }
-                                        ].map(opt => (
-                                          <button
-                                            key={opt.key}
-                                            onClick={() => handleRecordAttendance(activeProkerMeetingId, x.id, opt.key)}
-                                            style={{
-                                              padding: '4px 10px',
-                                              fontSize: '11px',
-                                              fontWeight: 700,
-                                              borderRadius: '4px',
-                                              border: 'none',
-                                              cursor: 'pointer',
-                                              background: currentStatus === opt.key ? opt.bg : 'var(--card-border)',
-                                              color: currentStatus === opt.key ? '#ffffff' : 'var(--text-muted)',
-                                              transition: 'all 0.15s ease'
-                                            }}
-                                          >
-                                            {opt.label}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <span style={{ fontSize: '12px', fontWeight: 700, color: currentStatus === 'PRESENT' ? 'var(--success)' : currentStatus === 'SICK' ? 'var(--warning)' : currentStatus === 'PERMIT' ? 'var(--secondary-blue)' : 'var(--danger)' }}>
-                                        {currentStatus === 'PRESENT' ? 'Hadir' : currentStatus === 'SICK' ? 'Sakit' : currentStatus === 'PERMIT' ? 'Izin' : 'Alpa'}
-                                      </span>
-                                    )}
+                                    <span style={{ fontSize: '12px', fontWeight: 700, color: currentStatus === 'PRESENT' ? 'var(--success)' : 'var(--danger)' }}>
+                                      {currentStatus === 'PRESENT' ? 'Present' : 'Absent'}
+                                    </span>
+                                  </td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    {(() => {
+                                      const isSelf = 
+                                        userData?.username?.toLowerCase() === x.student?.user?.username?.toLowerCase() ||
+                                        (userData?.level === 'student' && userData.students?.[0] && x.studentid === userData.students[0].id);
+                                      
+                                      if (!isSelf) return '-';
+
+                                      return (
+                                        <button
+                                          type="button"
+                                          title="Show Member QR Code for this Meeting"
+                                          onClick={() => {
+                                            const meet = (subData.meetings || []).find((m: any) => m.id === activeProkerMeetingId);
+                                            setActiveQrMember({
+                                              memberId: x.id,
+                                              memberName: studentName,
+                                              meetingId: activeProkerMeetingId,
+                                              meetingTitle: meet ? meet.title : 'Meeting'
+                                            });
+                                          }}
+                                          style={{
+                                            background: 'rgba(37,99,235,0.06)',
+                                            border: '1px solid rgba(37,99,235,0.15)',
+                                            color: 'var(--secondary-blue)',
+                                            padding: '6px',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            transition: 'all 0.15s ease'
+                                          }}
+                                          onMouseOver={e => {
+                                            e.currentTarget.style.background = 'var(--secondary-blue)';
+                                            e.currentTarget.style.color = '#ffffff';
+                                          }}
+                                          onMouseOut={e => {
+                                            e.currentTarget.style.background = 'rgba(37,99,235,0.06)';
+                                            e.currentTarget.style.color = 'var(--secondary-blue)';
+                                          }}
+                                        >
+                                          <QrCode size={16} />
+                                        </button>
+                                      );
+                                    })()}
                                   </td>
                                 </tr>
                               );
@@ -5336,7 +5478,7 @@ const Dashboard = () => {
                     </div>
                   ) : (
                     <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '8px' }}>
-                      Silakan pilih agenda rapat di atas untuk mengisi/melihat absensi kehadiran.
+                      Please select a meeting agenda above to fill or view attendance.
                     </div>
                   )}
                 </div>
@@ -5346,25 +5488,173 @@ const Dashboard = () => {
               {prokerTab === 'dokumentasi' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   {canEditProkerDetails && (
-                    <form onSubmit={handleAddDocumentation} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', background: 'rgba(37,99,235,0.02)', padding: '16px', borderRadius: '8px', border: '1px dashed var(--card-border)' }}>
-                      <div style={{ flex: 2, minWidth: '200px' }}>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>Judul Kegiatan / Foto</label>
-                        <input name="title" required type="text" className="form-input" placeholder="Pelepasan balon HUT RI..." style={{ margin: 0 }} />
+                    <div style={{ background: 'rgba(37,99,235,0.02)', padding: '20px', borderRadius: '12px', border: '1px dashed var(--card-border)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--card-border)', paddingBottom: '10px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setDocInputMethod('file')}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: docInputMethod === 'file' ? 'var(--secondary-blue)' : 'transparent',
+                            color: docInputMethod === 'file' ? '#ffffff' : 'var(--text-muted)',
+                            fontWeight: 600,
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          Upload Image File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDocInputMethod('link')}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: docInputMethod === 'link' ? 'var(--secondary-blue)' : 'transparent',
+                            color: docInputMethod === 'link' ? '#ffffff' : 'var(--text-muted)',
+                            fontWeight: 600,
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          Paste Image Link
+                        </button>
                       </div>
-                      <div style={{ flex: 3, minWidth: '250px' }}>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-dark)' }}>URL Gambar Dokumentasi</label>
-                        <input name="imageUrl" required type="url" className="form-input" placeholder="https://images.unsplash.com/example.jpg" style={{ margin: 0 }} />
-                      </div>
-                      <button type="submit" className="btn-primary-sm" style={{ height: '38px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Plus size={16} /> Unggah
-                      </button>
-                    </form>
+
+                      <form onSubmit={handleAddDocumentation} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', width: '100%' }}>
+                          <div style={{ flex: 1, minWidth: '250px' }}>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>
+                              Activity Title / Caption <span style={{ color: 'var(--danger)' }}>*</span>
+                            </label>
+                            <input 
+                              name="title" 
+                              required 
+                              type="text" 
+                              className="form-input" 
+                              placeholder="Balloon release at Independence Day..." 
+                              style={{ margin: 0 }} 
+                            />
+                          </div>
+                        </div>
+
+                        {docInputMethod === 'link' ? (
+                          <div style={{ width: '100%' }}>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>
+                              Image URL <span style={{ color: 'var(--danger)' }}>*</span>
+                            </label>
+                            <input 
+                              name="imageUrl" 
+                              required 
+                              type="url" 
+                              className="form-input" 
+                              placeholder="https://images.unsplash.com/photo-example.jpg" 
+                              style={{ margin: 0 }} 
+                            />
+                          </div>
+                        ) : (
+                          <div style={{ width: '100%' }}>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-dark)' }}>
+                              Upload Image <span style={{ color: 'var(--danger)' }}>*</span>
+                            </label>
+
+                            <div
+                              onDragEnter={handleDocDrag}
+                              onDragOver={handleDocDrag}
+                              onDragLeave={handleDocDrag}
+                              onDrop={handleDocDrop}
+                              onClick={() => document.getElementById('doc-file-input')?.click()}
+                              style={{
+                                border: docDragActive ? '2px dashed var(--secondary-blue)' : '2px dashed var(--card-border)',
+                                borderRadius: '8px',
+                                padding: '30px 20px',
+                                textAlign: 'center',
+                                background: docDragActive ? 'rgba(37, 99, 235, 0.05)' : 'var(--bg-soft-white)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}
+                            >
+                              <input 
+                                id="doc-file-input"
+                                type="file" 
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    handleDocFileSelection(e.target.files[0]);
+                                  }
+                                }}
+                              />
+
+                              <Download size={28} color={docDragActive ? 'var(--secondary-blue)' : 'var(--text-muted)'} />
+
+                              {selectedDocFile ? (
+                                <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '6px', padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', maxWidth: '100%', boxSizing: 'border-box' }}>
+                                  {selectedDocFile.dataUrl !== 'mock-file:large' && (
+                                    <img 
+                                      src={selectedDocFile.dataUrl} 
+                                      alt="Preview" 
+                                      style={{ width: '120px', height: '80px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--card-border)' }} 
+                                    />
+                                  )}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', overflow: 'hidden' }}>
+                                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-dark)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '200px' }}>
+                                        {selectedDocFile.name}
+                                      </span>
+                                      <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                                        {selectedDocFile.size}
+                                      </span>
+                                    </div>
+                                    <button 
+                                      type="button"
+                                      onClick={() => setSelectedDocFile(null)}
+                                      style={{ background: 'transparent', border: 'none', color: 'var(--danger)', fontWeight: 700, cursor: 'pointer', fontSize: '11px', padding: '4px' }}
+                                    >
+                                      Replace
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)' }}>
+                                    Drag & drop your image here, or click to browse
+                                  </p>
+                                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                    Supported format: JPG, PNG, GIF. Max file size: 5MB
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+                          <button 
+                            type="submit" 
+                            className="btn-primary-sm" 
+                            style={{ height: '38px', padding: '0 24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700 }}
+                          >
+                            <Plus size={16} /> Add Photo
+                          </button>
+                        </div>
+                      </form>
+                    </div>
                   )}
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
                     {!subData.documentations || subData.documentations.length === 0 ? (
                       <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '8px' }}>
-                        Belum ada foto dokumentasi kegiatan yang ditambahkan.
+                        No activity documentation photos have been added yet.
                       </div>
                     ) : (
                       subData.documentations.map((x: any) => (
@@ -5380,13 +5670,13 @@ const Dashboard = () => {
                           <div style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                               <h4 style={{ margin: '0 0 2px 0', fontSize: '13px', fontWeight: 700, color: 'var(--primary-navy)' }}>{x.title}</h4>
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Diunggah: {x.createdAt}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Uploaded: {x.createdAt}</span>
                             </div>
                             {canEditProkerDetails && (
                               <button
                                 onClick={() => handleDeleteDocumentation(x.id)}
                                 style={{ border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
-                                title="Hapus Dokumentasi"
+                                title="Delete Documentation"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -5416,14 +5706,14 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <BookOpen size={20} color="var(--secondary-blue)" />
-                Kelola Data Kelas
+                Manage Class Data
               </h2>
               <button onClick={() => setActiveModal('add-class')} className="btn-primary-sm">
-                <Plus size={16} /> Tambah Kelas
+                <Plus size={16} /> Add Class
               </button>
             </div>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              Kelola data kelas terdaftar dalam sistem.
+              Manage registered class metadata within the system.
             </p>
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
@@ -5432,7 +5722,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Cari kelas, grade, jurusan..." 
+                  placeholder="Search class, grade, major..." 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
@@ -5444,10 +5734,10 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Nama Kelas</th>
+                    <th>Class Name</th>
                     <th>Grade</th>
-                    <th>Jurusan</th>
-                    <th>Aksi</th>
+                    <th>Major</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5467,14 +5757,14 @@ const Dashboard = () => {
                           <Edit2 size={13} /> Edit
                         </button>
                         <button onClick={() => handleDeleteClass(c.id)} className="action-btn action-btn-danger">
-                          <Trash2 size={13} /> Hapus
+                          <Trash2 size={13} /> Delete
                         </button>
                       </td>
                     </tr>
                   ))}
                   {classes.length === 0 && (
                     <tr>
-                      <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data kelas.</td>
+                      <td colSpan={4} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No class data available.</td>
                     </tr>
                   )}
                 </tbody>
@@ -5493,14 +5783,14 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Award size={20} color="var(--secondary-blue)" />
-                Kelola Data Grade (Tingkatan)
+                Manage Grade (Level) Data
               </h2>
               <button onClick={() => setActiveModal('add-grade')} className="btn-primary-sm">
-                <Plus size={16} /> Tambah Grade
+                <Plus size={16} /> Add Grade
               </button>
             </div>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              Pengaturan tingkatan kelas aktif dalam sekolah.
+              Configuration of active grade levels in school.
             </p>
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
@@ -5509,7 +5799,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Cari grade..." 
+                  placeholder="Search grade..." 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
@@ -5521,8 +5811,8 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Nama Grade</th>
-                    <th>Aksi</th>
+                    <th>Grade Name</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5538,14 +5828,14 @@ const Dashboard = () => {
                           <Edit2 size={13} /> Edit
                         </button>
                         <button onClick={() => handleDeleteGrade(g.id)} className="action-btn action-btn-danger">
-                          <Trash2 size={13} /> Hapus
+                          <Trash2 size={13} /> Delete
                         </button>
                       </td>
                     </tr>
                   ))}
                   {filteredGrades.length === 0 && (
                     <tr>
-                      <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data grade.</td>
+                      <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No grade data available.</td>
                     </tr>
                   )}
                 </tbody>
@@ -5565,14 +5855,14 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <GraduationCap size={20} color="var(--secondary-blue)" />
-                Kelola Data Jurusan (Major)
+                Manage Major Data
               </h2>
               <button onClick={() => setActiveModal('add-major')} className="btn-primary-sm">
-                <Plus size={16} /> Tambah Jurusan
+                <Plus size={16} /> Add Major
               </button>
             </div>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              Pengaturan data jurusan sekolah terdaftar.
+              Configure registered school majors and departments.
             </p>
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
@@ -5581,7 +5871,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Cari jurusan..." 
+                  placeholder="Search major..." 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
@@ -5593,9 +5883,9 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Kode</th>
-                    <th>Nama Lengkap Jurusan</th>
-                    <th>Aksi</th>
+                    <th>Code</th>
+                    <th>Department / Major Name</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5613,14 +5903,14 @@ const Dashboard = () => {
                           <Edit2 size={13} /> Edit
                         </button>
                         <button onClick={() => handleDeleteMajor(m.id)} className="action-btn action-btn-danger">
-                          <Trash2 size={13} /> Hapus
+                          <Trash2 size={13} /> Delete
                         </button>
                       </td>
                     </tr>
                   ))}
                   {filteredMajors.length === 0 && (
                     <tr>
-                      <td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data jurusan.</td>
+                      <td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No major data available.</td>
                     </tr>
                   )}
                 </tbody>
@@ -5639,14 +5929,14 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Award size={20} color="var(--secondary-blue)" />
-                Kelola Data Peran (Role)
+                Manage Role (Position) Data
               </h2>
               <button onClick={() => setActiveModal('add-role')} className="btn-primary-sm">
-                <Plus size={16} /> Tambah Role
+                <Plus size={16} /> Add Role
               </button>
             </div>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              Pengaturan peran/jabatan dalam kepengurusan sekolah dan OSIS.
+              Configure administrative roles and positions within OSIS board and committee members.
             </p>
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
@@ -5655,7 +5945,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Cari peran..." 
+                  placeholder="Search role..." 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
@@ -5667,8 +5957,8 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Nama Role</th>
-                    <th>Aksi</th>
+                    <th>Role Name</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5684,14 +5974,14 @@ const Dashboard = () => {
                           <Edit2 size={13} /> Edit
                         </button>
                         <button onClick={() => handleDeleteRole(r.id)} className="action-btn action-btn-danger">
-                          <Trash2 size={13} /> Hapus
+                          <Trash2 size={13} /> Delete
                         </button>
                       </td>
                     </tr>
                   ))}
                   {filteredRoles.length === 0 && (
                     <tr>
-                      <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data peran (role).</td>
+                      <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No role data available.</td>
                     </tr>
                   )}
                 </tbody>
@@ -5710,14 +6000,14 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Layers size={20} color="var(--secondary-blue)" />
-                Kelola Data Sekbid (Section)
+                Manage Section (Sekbid) Data
               </h2>
               <button onClick={() => setActiveModal('add-section')} className="btn-primary-sm">
-                <Plus size={16} /> Tambah Sekbid
+                <Plus size={16} /> Add Section
               </button>
             </div>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              Pengaturan sekbid (seksi bidang) kepengurusan OSIS.
+              Configure committee sections and functional departments (Seksi Bidang) of OSIS.
             </p>
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
@@ -5726,7 +6016,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Cari sekbid..." 
+                  placeholder="Search section..." 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
@@ -5738,8 +6028,8 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Nama Sekbid</th>
-                    <th>Aksi</th>
+                    <th>Section Name</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5755,14 +6045,14 @@ const Dashboard = () => {
                           <Edit2 size={13} /> Edit
                         </button>
                         <button onClick={() => handleDeleteSection(s.id)} className="action-btn action-btn-danger">
-                          <Trash2 size={13} /> Hapus
+                          <Trash2 size={13} /> Delete
                         </button>
                       </td>
                     </tr>
                   ))}
                   {filteredSections.length === 0 && (
                     <tr>
-                      <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data sekbid (section).</td>
+                      <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No section data available.</td>
                     </tr>
                   )}
                 </tbody>
@@ -5776,7 +6066,7 @@ const Dashboard = () => {
         const formatDatetime = (dtStr: string) => {
           if (!dtStr) return '-';
           try {
-            return new Date(dtStr).toLocaleDateString('id-ID', {
+            return new Date(dtStr).toLocaleDateString('en-US', {
               day: 'numeric',
               month: 'short',
               year: 'numeric',
@@ -5798,7 +6088,7 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Calendar size={20} color="var(--secondary-blue)" />
-                Kelola Data Periode & Waktu Voting
+                Manage Period & Voting Timeline
               </h2>
               <button onClick={() => {
                 setNewPeriodYear('');
@@ -5807,11 +6097,11 @@ const Dashboard = () => {
                 setNewPeriodVoteEnd('');
                 setActiveModal('add-period');
               }} className="btn-primary-sm">
-                <Plus size={16} /> Tambah Periode
+                <Plus size={16} /> Add Period
               </button>
             </div>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              Pengaturan tahun ajaran periode kepengurusan OSIS dan rentang durasi pelaksanaan voting.
+              Configure active academic years for OSIS periods and define duration timelines for e-voting execution.
             </p>
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
@@ -5820,7 +6110,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Cari periode, status..." 
+                  placeholder="Search period, status..." 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
@@ -5832,11 +6122,11 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Tahun Ajaran</th>
+                    <th>Academic Year</th>
                     <th>Status</th>
-                    <th>Mulai Voting</th>
-                    <th>Selesai Voting</th>
-                    <th>Aksi</th>
+                    <th>Voting Start</th>
+                    <th>Voting End</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5866,7 +6156,7 @@ const Dashboard = () => {
                   ))}
                   {filteredPeriods.length === 0 && (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data periode.</td>
+                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No period data available.</td>
                     </tr>
                   )}
                 </tbody>
@@ -5888,14 +6178,14 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <UserIcon className="text-muted" size={20} style={{ color: 'var(--secondary-blue)' }} />
-                Kelola Pengguna Sistem
+                Manage System Users
               </h2>
               <button onClick={() => setActiveModal('add-user')} className="btn-primary-sm">
-                <Plus size={16} /> Tambah User
+                <Plus size={16} /> Add User
               </button>
             </div>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              Daftar seluruh akun pengguna yang terdaftar di database sistem beserta level aksesnya.
+              List of all user accounts registered in the database along with their authorization levels.
             </p>
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
@@ -5904,7 +6194,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Cari user, email, role..." 
+                  placeholder="Search user, email, role..." 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
@@ -5919,8 +6209,8 @@ const Dashboard = () => {
                     <th>Username</th>
                     <th>Level</th>
                     <th>Email</th>
-                    <th>Jabatan (Role)</th>
-                    <th>Aksi</th>
+                    <th>Role / Position</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5952,14 +6242,14 @@ const Dashboard = () => {
                           <Lock size={13} /> Reset PW
                         </button>
                         <button onClick={() => handleDeleteUser(u.id)} className="action-btn action-btn-danger">
-                          <Trash2 size={13} /> Hapus
+                          <Trash2 size={13} /> Delete
                         </button>
                       </td>
                     </tr>
                   ))}
                   {filteredUsers.length === 0 && (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Belum ada data user.</td>
+                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No user data available.</td>
                     </tr>
                   )}
                 </tbody>
@@ -6513,17 +6803,17 @@ const Dashboard = () => {
           <div className="theme-card profile-card" style={{ gridColumn: 'span 2' }}>
             <h2 className="profile-card-title">
               <Settings size={20} color="var(--secondary-blue)" />
-              Pengaturan Sistem Utama
+              Core System Settings
             </h2>
             <form onSubmit={handleUpdateSystem} className="settings-form" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', textAlign: 'left' }}>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Nama Aplikasi / Sistem</label>
+                <label className="form-label">Application / System Name</label>
                 <input type="text" className="form-input" style={{ paddingLeft: '16px' }} value={sysName} onChange={e => setSysName(e.target.value)} required />
               </div>
 
               {/* Favicon Drag & Drop Zone */}
               <div className="form-group">
-                <label className="form-label">Favicon Sistem (.ico, .png)</label>
+                <label className="form-label">System Favicon (.ico, .png)</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div
                     onDragEnter={handleDragFavicon}
@@ -6556,15 +6846,15 @@ const Dashboard = () => {
                     />
                     <Download size={20} color={faviconDragActive ? 'var(--secondary-blue)' : 'var(--text-muted)'} />
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dark)' }}>
-                      Seret & taruh favicon, atau klik
+                      Drag & drop favicon, or click to upload
                     </span>
                   </div>
                   {sysFavicon && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-soft-white)', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--card-border)' }}>
                       <img src={sysFavicon} alt="Favicon Preview" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover' }} />
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Pratinjau Favicon</span>
-                        <button type="button" onClick={() => setSysFavicon('')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 700 }}>Hapus</button>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Favicon Preview</span>
+                        <button type="button" onClick={() => setSysFavicon('')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 700 }}>Remove</button>
                       </div>
                     </div>
                   )}
@@ -6573,7 +6863,7 @@ const Dashboard = () => {
 
               {/* Logo Drag & Drop Zone */}
               <div className="form-group">
-                <label className="form-label">Logo Sistem (.png, .jpg)</label>
+                <label className="form-label">System Logo (.png, .jpg)</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div
                     onDragEnter={handleDragLogo}
@@ -6606,15 +6896,15 @@ const Dashboard = () => {
                     />
                     <Download size={20} color={logoDragActive ? 'var(--secondary-blue)' : 'var(--text-muted)'} />
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dark)' }}>
-                      Seret & taruh logo, atau klik
+                      Drag & drop logo, or click to upload
                     </span>
                   </div>
                   {sysLogo && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-soft-white)', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--card-border)' }}>
                       <img src={sysLogo} alt="Logo Preview" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover' }} />
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Pratinjau Logo</span>
-                        <button type="button" onClick={() => setSysLogo('')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 700 }}>Hapus</button>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Logo Preview</span>
+                        <button type="button" onClick={() => setSysLogo('')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 700 }}>Remove</button>
                       </div>
                     </div>
                   )}
@@ -6622,16 +6912,16 @@ const Dashboard = () => {
               </div>
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Alamat Sekolah / Institusi</label>
+                <label className="form-label">School / Institution Address</label>
                 <input type="text" className="form-input" style={{ paddingLeft: '16px' }} value={sysAddress} onChange={e => setSysAddress(e.target.value)} />
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Kontak / Dukungan Teknis</label>
+                <label className="form-label">Contact / Technical Support</label>
                 <input type="text" className="form-input" style={{ paddingLeft: '16px' }} value={sysContact} onChange={e => setSysContact(e.target.value)} />
               </div>
               <div style={{ gridColumn: 'span 2' }}>
                 <button type="submit" className="btn-primary-sm">
-                  <Save size={16} /> Simpan Pengaturan
+                  <Save size={16} /> Save Settings
                 </button>
               </div>
             </form>
@@ -6644,44 +6934,44 @@ const Dashboard = () => {
           <div className="theme-card profile-card" style={{ gridColumn: 'span 2' }}>
             <h2 className="profile-card-title">
               <Database size={20} color="var(--secondary-blue)" />
-              Pencadangan Database (Backup)
+              Database Backup Management
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
               <div style={{ textAlign: 'left' }}>
-                <h3 style={{ margin: '0 0 12px', fontSize: '15px', color: 'var(--primary-navy)' }}>Status Keamanan Database</h3>
+                <h3 style={{ margin: '0 0 12px', fontSize: '15px', color: 'var(--primary-navy)' }}>Database Security Status</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Status Koneksi</span>
-                    <span style={{ color: 'var(--success)', fontWeight: 700 }}>TERHUBUNG</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Connection Status</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 700 }}>CONNECTED</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Mesin Database</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Database Engine</span>
                     <span style={{ fontWeight: 600 }}>PostgreSQL 16</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Jumlah Tabel Aktif</span>
-                    <span style={{ fontWeight: 600 }}>10 Tabel</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Active Tables</span>
+                    <span style={{ fontWeight: 600 }}>10 Tables</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Ukuran Database</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Database Size</span>
                     <span style={{ fontWeight: 600 }}>~24.5 KB</span>
                   </div>
                 </div>
                 <button onClick={triggerDatabaseBackup} className="btn-primary-sm" style={{ marginTop: '20px' }}>
-                  <Download size={16} /> Mulai Backup Database
+                  <Download size={16} /> Initiate Database Backup
                 </button>
               </div>
 
               <div>
-                <h3 style={{ margin: '0 0 12px', fontSize: '15px', color: 'var(--primary-navy)' }}>Konsol Backup</h3>
+                <h3 style={{ margin: '0 0 12px', fontSize: '15px', color: 'var(--primary-navy)' }}>Backup Console</h3>
                 <div style={{ background: 'var(--bg-soft-white)', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '12px', height: '140px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '11px', color: 'var(--text-dark)', textAlign: 'left' }}>
                   {backupLogs.map((log, index) => <div key={index} style={{ marginBottom: '4px' }}>{log}</div>)}
-                  {backupLogs.length === 0 && <span style={{ color: 'var(--text-muted)' }}>Klik tombol untuk melihat progress logs.</span>}
+                  {backupLogs.length === 0 && <span style={{ color: 'var(--text-muted)' }}>Click the button to view progress logs.</span>}
                 </div>
                 {backupProgress !== null && (
                   <div style={{ marginTop: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                      <span>Progress Pencadangan</span>
+                      <span>Backup Progress</span>
                       <span>{Math.round(backupProgress)}%</span>
                     </div>
                     <div style={{ width: '100%', height: '8px', background: 'var(--card-border)', borderRadius: '99px', overflow: 'hidden' }}>
@@ -6699,10 +6989,10 @@ const Dashboard = () => {
           <div className="theme-card profile-card animate-slideup" style={{ gridColumn: 'span 2' }}>
             <h2 className="profile-card-title">
               <UserIcon size={20} color="var(--secondary-blue)" />
-              Ubah Profil & Kata Sandi
+              Update Profile & Password
             </h2>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px' }}>
-              Perbarui alamat email terdaftar atau ubah kata sandi akses akun Anda.
+              Update your registered email address or change your account access password.
             </p>
             
             {editProfileError && (
@@ -6720,24 +7010,24 @@ const Dashboard = () => {
 
             <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px' }}>
               <div className="form-group" style={{ textAlign: 'left' }}>
-                <label className="form-label">Username (Tidak dapat diubah)</label>
+                <label className="form-label">Username (Cannot be modified)</label>
                 <input type="text" className="form-input" style={{ paddingLeft: '16px', opacity: 0.6, cursor: 'not-allowed' }} value={userData?.username || ''} disabled />
               </div>
               <div className="form-group" style={{ textAlign: 'left' }}>
-                <label className="form-label">Alamat Email</label>
+                <label className="form-label">Email Address</label>
                 <input type="email" className="form-input" style={{ paddingLeft: '16px' }} value={editEmail} onChange={e => setEditEmail(e.target.value)} required />
               </div>
               <div className="form-group" style={{ textAlign: 'left' }}>
-                <label className="form-label">Kata Sandi Baru (Kosongkan jika tidak ingin diubah)</label>
-                <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Masukkan password baru" value={editPassword} onChange={e => setEditPassword(e.target.value)} />
+                <label className="form-label">New Password (Leave blank to keep unchanged)</label>
+                <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Enter new password" value={editPassword} onChange={e => setEditPassword(e.target.value)} />
               </div>
               <div className="form-group" style={{ textAlign: 'left' }}>
-                <label className="form-label">Konfirmasi Kata Sandi Baru</label>
-                <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Ulangi password baru" value={editConfirmPassword} onChange={e => setEditConfirmPassword(e.target.value)} />
+                <label className="form-label">Confirm New Password</label>
+                <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Repeat new password" value={editConfirmPassword} onChange={e => setEditConfirmPassword(e.target.value)} />
               </div>
               <div>
                 <button type="submit" className="btn-primary-sm">
-                  <Save size={16} /> Simpan Perubahan
+                  <Save size={16} /> Save Changes
                 </button>
               </div>
             </form>
@@ -6749,7 +7039,7 @@ const Dashboard = () => {
           return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: '300px' }}>
               <div className="spinner" style={{ width: '40px', height: '40px' }}></div>
-              <span style={{ marginLeft: '12px' }}>Memuat data keuangan kas...</span>
+              <span style={{ marginLeft: '12px' }}>Loading cash finance data...</span>
             </div>
           );
         }
@@ -6768,10 +7058,10 @@ const Dashboard = () => {
             <div className="theme-card profile-card" style={{ gridColumn: 'span 2', textAlign: 'center', padding: '40px' }}>
               <ShieldAlert size={48} color="var(--warning)" style={{ marginBottom: '16px' }} />
               <h2 className="profile-card-title" style={{ borderBottom: 'none', justifyContent: 'center' }}>
-                Tidak Ada Periode Aktif
+                No Active Period
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
-                Saat ini tidak ada periode kepengurusan OSIS yang aktif. Silakan hubungi Superadmin untuk mengaktifkan periode kepengurusan terlebih dahulu di menu <strong>Manage Period</strong>.
+                There is currently no active OSIS management period. Please contact the Superadmin to activate a management period first in the <strong>Manage Period</strong> menu.
               </p>
             </div>
           );
@@ -6800,8 +7090,8 @@ const Dashboard = () => {
         const canEditKas = ['superadmin', 'treasurer', 'president', 'vice president'].includes(normalizedUserRole);
 
         const monthNames = [
-          'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-          'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
         ];
 
         return (
@@ -6809,7 +7099,7 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Coins size={20} color="var(--secondary-blue)" />
-                Manajemen Kas OSIS
+                OSIS Cash Management
               </h2>
               
               {/* Month Navigation Control */}
@@ -6862,12 +7152,12 @@ const Dashboard = () => {
               </div>
 
               <span style={{ fontSize: '14px', fontWeight: 600, padding: '6px 12px', borderRadius: '20px', background: 'rgba(37, 99, 235, 0.1)', color: 'var(--secondary-blue)' }}>
-                Periode Aktif: {activePeriod.yearLabel}
+                Active Period: {activePeriod.yearLabel}
               </span>
             </div>
             
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px', flexShrink: 0 }}>
-              Kelola pembayaran kas OSIS per kelas untuk periode kepengurusan aktif. Uang kas per kelas dihitung berdasarkan tarif <strong>Rp 5.000 per siswa</strong> terdaftar.
+              Manage OSIS cash payments per class for the active management period. Cash per class is calculated based on a rate of <strong>IDR 5,000 per registered student</strong>.
             </p>
 
             {/* Metrics Dashboard Grid */}
@@ -6875,33 +7165,33 @@ const Dashboard = () => {
               
               {/* Metric 1 - Akumulasi Total */}
               <div className="theme-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(37, 99, 235, 0.02) 100%)', border: '1px solid rgba(37, 99, 235, 0.15)' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Kas OSIS (Akumulasi)</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total OSIS Cash (Accumulated)</span>
                 <span style={{ fontSize: '24px', fontWeight: 700, color: 'var(--secondary-blue)' }}>
-                  Rp {(kasData?.accumulatedTotal || 0).toLocaleString('id-ID')}
+                  IDR {(kasData?.accumulatedTotal || 0).toLocaleString('en-US')}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
                   <Coins size={14} color="var(--secondary-blue)" />
-                  <span>Total kas terkumpul semua bulan</span>
+                  <span>Total cash collected across all months</span>
                 </div>
               </div>
 
               {/* Metric 2 - Kas Bulan Ini (Terkumpul / Target) */}
               <div className="theme-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.02) 100%)', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Kas Bulan Ini</span>
-                <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--warning)', whiteSpace: 'nowrap' }}>
-                  Rp {totalPaidAmount.toLocaleString('id-ID')} / Rp {totalEstimatedAmount.toLocaleString('id-ID')}
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>This Month's Cash</span>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--warning)', whiteSpace: 'nowrap' }}>
+                  IDR {totalPaidAmount.toLocaleString('en-US')} / IDR {totalEstimatedAmount.toLocaleString('en-US')}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
                   <Building size={14} color="var(--warning)" />
-                  <span>Kas terkumpul / target bulan ini</span>
+                  <span>Cash collected / target this month</span>
                 </div>
               </div>
 
               {/* Metric 3 - Progress Kelas */}
               <div className="theme-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Progres Kelas Terbayar</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Paid Classes Progress</span>
                 <span style={{ fontSize: '24px', fontWeight: 700, color: 'var(--success)' }}>
-                  {paidClassesCount} / {totalClassesCount} Kelas
+                  {paidClassesCount} / {totalClassesCount} Classes
                 </span>
                 <div style={{ width: '100%', height: '6px', background: 'var(--card-border)', borderRadius: '99px', overflow: 'hidden', margin: '4px 0' }}>
                   <div style={{ width: `${totalClassesCount ? (paidClassesCount / totalClassesCount) * 100 : 0}%`, height: '100%', background: 'var(--success)', transition: 'width 0.3s ease' }}></div>
@@ -6917,7 +7207,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Cari kelas, grade, atau jurusan..." 
+                  placeholder="Search class, grade, or major..." 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
@@ -6926,7 +7216,7 @@ const Dashboard = () => {
               {!canEditKas && (
                 <div style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-soft-white)', padding: '8px 16px', borderRadius: '8px', color: 'var(--text-muted)' }}>
                   <ShieldAlert size={16} color="var(--warning)" />
-                  <span>Mode Lihat Saja. Hanya Bendahara/Pengurus OSIS yang dapat mengonfirmasi setoran kas.</span>
+                  <span>Read-Only Mode. Only the Treasurer/OSIS Board members can confirm cash deposits.</span>
                 </div>
               )}
             </div>
@@ -6936,20 +7226,20 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '80px', textAlign: 'center' }}>Bayar</th>
-                    <th>Nama Kelas</th>
-                    <th>Jurusan</th>
-                    <th style={{ textAlign: 'right' }}>Jumlah Siswa</th>
-                    <th style={{ textAlign: 'right' }}>Wajib Setor (Rp)</th>
-                    <th>Status Setoran</th>
-                    <th>Tanggal Bayar</th>
+                    <th style={{ width: '80px', textAlign: 'center' }}>Pay</th>
+                    <th>Class Name</th>
+                    <th>Major</th>
+                    <th style={{ textAlign: 'right' }}>Student Count</th>
+                    <th style={{ textAlign: 'right' }}>Required Deposit (IDR)</th>
+                    <th>Deposit Status</th>
+                    <th>Payment Date</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredKasClasses.length === 0 ? (
                     <tr>
                       <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                        Tidak ada data kelas yang cocok dengan pencarian Anda.
+                        No class data matches your search.
                       </td>
                     </tr>
                   ) : (
@@ -6990,23 +7280,23 @@ const Dashboard = () => {
                         </td>
                         <td style={{ fontWeight: 600 }}>{cls.grade} - {cls.classname}</td>
                         <td>{cls.major} ({cls.majorCode})</td>
-                        <td style={{ textAlign: 'right', fontWeight: 500 }}>{cls.studentCount} siswa</td>
+                        <td style={{ textAlign: 'right', fontWeight: 500 }}>{cls.studentCount} students</td>
                         <td style={{ textAlign: 'right', fontWeight: 600, color: cls.isPaid ? 'var(--success)' : 'var(--text-dark)' }}>
-                          Rp {cls.requiredPayment.toLocaleString('id-ID')}
+                          IDR {cls.requiredPayment.toLocaleString('en-US')}
                         </td>
                         <td>
                           {cls.isPaid ? (
                             <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)' }}>
-                              SUDAH BAYAR
+                              PAID
                             </span>
                           ) : (
                             <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)' }}>
-                              BELUM BAYAR
+                              UNPAID
                             </span>
                           )}
                         </td>
                         <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-                          {cls.isPaid && cls.paidAt ? new Date(cls.paidAt).toLocaleDateString('id-ID', {
+                          {cls.isPaid && cls.paidAt ? new Date(cls.paidAt).toLocaleDateString('en-US', {
                             day: 'numeric',
                             month: 'long',
                             year: 'numeric',
@@ -7343,38 +7633,38 @@ const Dashboard = () => {
         <div className="sidebar-scrollable-content" style={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', paddingRight: '4px', marginBottom: '16px' }}>
           {/* Menu Utama */}
           <div className="sidebar-menu-section" style={{ marginBottom: 0 }}>
-            <div className="sidebar-menu-title">Menu Utama</div>
+            <div className="sidebar-menu-title">Main Menu</div>
             <div className={`sidebar-item ${activeMenu === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('/dashboard')}>
               <Grid size={16} /> Dashboard
             </div>
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('kandidat')) && (
               <div className={`sidebar-item ${activeMenu === 'kandidat' ? 'active' : ''}`} onClick={() => navigate('/candidates')}>
-                <Users size={16} /> Kandidat OSIS
+                <Users size={16} /> OSIS Candidates
               </div>
             )}
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('proker')) && (
               <div className={`sidebar-item ${activeMenu === 'proker' ? 'active' : ''}`} onClick={() => navigate('/proker')}>
-                <Briefcase size={16} /> Program Kerja
+                <Briefcase size={16} /> Work Programs
               </div>
             )}
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('organization')) && (
               <div className={`sidebar-item ${activeMenu === 'organization' ? 'active' : ''}`} onClick={() => navigate('/organization')}>
-                <UserIcon size={16} /> Struktur Organisasi
+                <UserIcon size={16} /> Organization Structure
               </div>
             )}
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('kas')) && (
               <div className={`sidebar-item ${activeMenu === 'kas' ? 'active' : ''}`} onClick={() => navigate('/kas')}>
-                <Coins size={16} /> Kas OSIS
+                <Coins size={16} /> OSIS Cash
               </div>
             )}
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('evaluasi-kinerja')) && (
               <div className={`sidebar-item ${activeMenu === 'evaluasi-kinerja' ? 'active' : ''}`} onClick={() => navigate('/evaluasi-kinerja')}>
-                <TrendingUp size={16} /> Evaluasi Kinerja
+                <TrendingUp size={16} /> Performance Evaluation
               </div>
             )}
 
@@ -7463,7 +7753,7 @@ const Dashboard = () => {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <Settings size={16} />
-                  <span>Pengaturan</span>
+                  <span>Settings</span>
                 </div>
                 {isSettingsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </div>
@@ -7519,8 +7809,8 @@ const Dashboard = () => {
           <div className="dashboard-banner">
             <div className="welcome-section" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div>
-                <h1>Selamat Datang, {userData.username}!</h1>
-                <p>{systemSettings?.systemname || 'Sistem Informasi OSIS & Manajemen Level Akun'}</p>
+                <h1>Welcome, {userData.username}!</h1>
+                <p>{systemSettings?.systemname || 'OSIS Information System & Account Level Management'}</p>
               </div>
             </div>
           </div>
@@ -7541,15 +7831,17 @@ const Dashboard = () => {
                 {activeModal === 'add-grade' && 'Tambah Grade Baru'}
                 {activeModal === 'edit-grade' && 'Edit Grade'}
                 {activeModal === 'add-major' && 'Tambah Jurusan Baru'}
-                {activeModal === 'edit-major' && 'Edit Jurusan'}
-                {activeModal === 'add-period' && 'Tambah Periode Baru'}
-                {activeModal === 'edit-period' && 'Edit Periode'}
-                {activeModal === 'add-user' && 'Tambah Pengguna Baru'}
-                {activeModal === 'edit-user' && 'Edit Pengguna'}
-                {activeModal === 'confirm-reset-pw' && 'Konfirmasi Reset Password'}
-                {activeModal === 'add-candidate' && 'Tambah Kandidat OSIS Baru'}
-                {activeModal === 'add-proker' && 'Tambah Program Kerja OSIS'}
-                {activeModal === 'edit-proker' && 'Edit Program Kerja OSIS'}
+                {activeModal === 'add-major' && 'Add New Major'}
+                {activeModal === 'edit-major' && 'Edit Major'}
+                {activeModal === 'add-period' && 'Add New Period'}
+                {activeModal === 'edit-period' && 'Edit Period'}
+                {activeModal === 'add-user' && 'Add New User'}
+                {activeModal === 'edit-user' && 'Edit User'}
+                {activeModal === 'confirm-reset-pw' && 'Confirm Password Reset'}
+                {activeModal === 'add-candidate' && 'Add New OSIS Candidate'}
+                {activeModal === 'edit-candidate' && 'Edit OSIS Candidate'}
+                {activeModal === 'add-proker' && 'Add New OSIS Work Program'}
+                {activeModal === 'edit-proker' && 'Edit OSIS Work Program'}
                 {activeModal === 'add-org-member' && 'Add Organization Member'}
                 {activeModal === 'edit-org-member' && 'Edit Organization Member'}
               </h3>
@@ -7949,11 +8241,11 @@ const Dashboard = () => {
             {(activeModal === 'add-candidate' || activeModal === 'edit-candidate') && (
               <form onSubmit={activeModal === 'edit-candidate' ? handleEditCandidate : handleAddCandidate} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">No. Urut Paslon</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: 03" value={newCandidatePaslonNo} onChange={e => setNewCandidatePaslonNo(e.target.value)} required />
+                  <label className="form-label">Candidate Pair Number</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: 03" value={newCandidatePaslonNo} onChange={e => setNewCandidatePaslonNo(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Pilih Calon Ketua OSIS (President)</label>
+                  <label className="form-label">Select OSIS President Candidate (President)</label>
                   <select 
                     className="form-input" 
                     style={{ paddingLeft: '16px' }}
@@ -7966,7 +8258,7 @@ const Dashboard = () => {
                     }}
                     required
                   >
-                    <option value="">Pilih Siswa (Level Student)</option>
+                    <option value="">Select Student</option>
                     {candidateStudentOptions.map(u => (
                       <option key={u.id} value={u.id}>
                         {formatCandidateStudentOptionLabel(u)}
@@ -7976,7 +8268,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Pilih Calon Wakil Ketua OSIS (Vice President)</label>
+                  <label className="form-label">Select OSIS Vice President Candidate (Vice President)</label>
                   <select 
                     className="form-input" 
                     style={{ paddingLeft: '16px' }}
@@ -7984,7 +8276,7 @@ const Dashboard = () => {
                     onChange={e => setSelectedVicePresidentId(e.target.value)}
                     required
                   >
-                    <option value="">Pilih Siswa (Level Student)</option>
+                    <option value="">Select Student</option>
                     {viceCandidateStudentOptions.map(u => (
                       <option key={u.id} value={u.id}>
                         {formatCandidateStudentOptionLabel(u)}
@@ -7993,19 +8285,19 @@ const Dashboard = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Kelas / Jurusan</label>
-                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Contoh: XII RPL 1 & XII RPL 2" value={newCandidateClasses} onChange={e => setNewCandidateClasses(e.target.value)} />
+                  <label className="form-label">Class / Major</label>
+                  <input type="text" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Example: XII RPL 1 & XII RPL 2" value={newCandidateClasses} onChange={e => setNewCandidateClasses(e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Visi</label>
-                  <textarea className="form-input" style={{ paddingLeft: '16px', minHeight: '60px' }} placeholder="Visi kandidat..." value={newCandidateVisi} onChange={e => setNewCandidateVisi(e.target.value)} required />
+                  <label className="form-label">Vision</label>
+                  <textarea className="form-input" style={{ paddingLeft: '16px', minHeight: '60px' }} placeholder="Candidate's vision..." value={newCandidateVisi} onChange={e => setNewCandidateVisi(e.target.value)} required />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Misi</label>
-                  <textarea className="form-input" style={{ paddingLeft: '16px', minHeight: '60px' }} placeholder="Misi kandidat..." value={newCandidateMisi} onChange={e => setNewCandidateMisi(e.target.value)} />
+                  <label className="form-label">Mission</label>
+                  <textarea className="form-input" style={{ paddingLeft: '16px', minHeight: '60px' }} placeholder="Candidate's mission..." value={newCandidateMisi} onChange={e => setNewCandidateMisi(e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Upload Foto Calon</label>
+                  <label className="form-label">Upload Candidate Photo</label>
                   <input 
                     type="file" 
                     className="form-input" 
@@ -8016,7 +8308,7 @@ const Dashboard = () => {
                       if (file) {
                         const reader = new FileReader();
                         reader.onloadend = () => {
-                          setNewCandidatePhoto(reader.result as string);
+                           setNewCandidatePhoto(reader.result as string);
                         };
                         reader.readAsDataURL(file);
                       }
@@ -8025,20 +8317,20 @@ const Dashboard = () => {
                   {newCandidatePhoto && (
                     <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <img src={newCandidatePhoto} alt="Preview" style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--card-border)' }} />
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Preview Foto</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Photo Preview</span>
                     </div>
                   )}
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Pilih Periode Pemilihan</label>
+                  <label className="form-label">Select Election Period</label>
                   <select className="form-input" style={{ paddingLeft: '16px' }} value={newCandidatePeriodId} onChange={e => setNewCandidatePeriodId(e.target.value)} required>
-                    <option value="">Pilih Periode</option>
+                    <option value="">Select Period</option>
                     {periods.map(p => <option key={p.id} value={p.id}>{p.yearLabel} ({p.status})</option>)}
                   </select>
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -8047,55 +8339,55 @@ const Dashboard = () => {
             {(activeModal === 'add-proker' || activeModal === 'edit-proker') && (
               <form onSubmit={activeModal === 'edit-proker' ? handleEditProker : (e) => handleAddProker(e, selectedProkerPeriod?.id || 'p3')} style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                 <div className="form-group">
-                  <label className="form-label">Nama Program Kerja</label>
+                  <label className="form-label">Work Program Name</label>
                   <input 
                     type="text" 
                     className="form-input" 
                     style={{ paddingLeft: '16px' }} 
-                    placeholder="Contoh: LDKS Pengurus OSIS" 
+                    placeholder="Example: OSIS Leadership Training" 
                     value={prokerName} 
                     onChange={e => setProkerName(e.target.value)} 
                     required 
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Deskripsi Program</label>
+                  <label className="form-label">Program Description</label>
                   <textarea 
                     className="form-input" 
                     style={{ paddingLeft: '16px', minHeight: '80px' }} 
-                    placeholder="Jelaskan detail/maksud program..." 
+                    placeholder="Explain program details/objectives..." 
                     value={prokerDesc} 
                     onChange={e => setProkerDesc(e.target.value)} 
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Target Pelaksanaan</label>
+                  <label className="form-label">Target Date / Timeline</label>
                   <input 
                     type="text" 
                     className="form-input" 
                     style={{ paddingLeft: '16px' }} 
-                    placeholder="Contoh: September 2026 atau Akhir Ujian Semester" 
+                    placeholder="Example: September 2026 or End of Semester Exams" 
                     value={prokerTargetDate} 
                     onChange={e => setProkerTargetDate(e.target.value)} 
                     required 
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Status Program</label>
+                  <label className="form-label">Program Status</label>
                   <select 
                     className="form-input" 
                     style={{ paddingLeft: '16px' }} 
                     value={prokerStatus} 
                     onChange={e => setProkerStatus(e.target.value)}
                   >
-                    <option value="Rencana">Rencana</option>
-                    <option value="Berjalan">Sedang Berjalan</option>
-                    <option value="Selesai">Selesai</option>
+                    <option value="Rencana">Planned</option>
+                    <option value="Berjalan">In Progress</option>
+                    <option value="Selesai">Completed</option>
                   </select>
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Batal</button>
-                  <button type="submit" className="btn-primary-sm">Simpan</button>
+                  <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
+                  <button type="submit" className="btn-primary-sm">Save</button>
                 </div>
               </form>
             )}
@@ -8295,6 +8587,542 @@ const Dashboard = () => {
           }} className="toast-progress-bar" />
         </div>
       )}
+
+      {/* QR Code Viewer Modal */}
+      {activeQrMember && (
+        <div className="modal-backdrop" onClick={() => setActiveQrMember(null)}>
+          <div className="modal-card animate-slideup" style={{ maxWidth: '380px', padding: '24px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 className="modal-title" style={{ margin: 0, fontSize: '16px' }}>Attendance QR Code</h3>
+              <button onClick={() => setActiveQrMember(null)} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>✕</button>
+            </div>
+            <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--card-border)', display: 'inline-flex', justifyContent: 'center', alignItems: 'center', marginBottom: '16px' }}>
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=2563EB&data=${encodeURIComponent(JSON.stringify({ meetingId: activeQrMember.meetingId, memberId: activeQrMember.memberId }))}`} 
+                alt="QR Code" 
+                style={{ width: '200px', height: '200px', display: 'block' }}
+              />
+            </div>
+            <h4 style={{ margin: '0 0 6px', fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700 }}>{activeQrMember.memberName}</h4>
+            <p style={{ margin: '0 0 4px', fontSize: '12.5px', color: 'var(--text-muted)' }}>Meeting: <strong>{activeQrMember.meetingTitle}</strong></p>
+            <p style={{ margin: 0, fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>Show this QR code to the coordinator or admin to scan</p>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Scanner Modal */}
+      {showScanner && (
+        <ScannerModal 
+          onClose={() => {
+            setShowScanner(false);
+            setScannerResult(null);
+            setScannerError(null);
+          }}
+          onSuccess={(res) => {
+            setScannerResult(res);
+            loadProkersData(); // refresh data
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// QR Code Scanner Modal Component
+interface ScannerModalProps {
+  onClose: () => void;
+  onSuccess: (result: { memberName: string; meetingTitle: string; prokerName: string }) => void;
+}
+
+const ScannerModal: React.FC<ScannerModalProps> = ({ onClose, onSuccess }) => {
+  const [cameraActive, setCameraActive] = useState(false);
+  const [loadingJsqr, setLoadingJsqr] = useState(true);
+  const [successData, setSuccessData] = useState<{ memberName: string; meetingTitle: string; prokerName: string } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  const videoRef = useMemo(() => ({ current: null as HTMLVideoElement | null }), []);
+  const canvasRef = useMemo(() => ({ current: null as HTMLCanvasElement | null }), []);
+  const streamRef = useMemo(() => ({ current: null as MediaStream | null }), []);
+  const animationFrameRef = useMemo(() => ({ current: null as number | null }), []);
+
+  // Play Beep Sound
+  const playBeep = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(1000, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.12);
+    } catch (err) {
+      console.error('AudioContext beep failed:', err);
+    }
+  };
+
+  // Laser Keyframe Style Appender
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.id = 'qr-scanner-laser-keyframes';
+    style.innerHTML = `
+      @keyframes scanLaser {
+        0% { top: 0%; }
+        50% { top: 100%; }
+        100% { top: 0%; }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      const el = document.getElementById('qr-scanner-laser-keyframes');
+      if (el) el.remove();
+    };
+  }, []);
+
+  // Load jsQR script dynamically
+  useEffect(() => {
+    let script = document.querySelector('script[src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"]') as HTMLScriptElement;
+    
+    const onScriptLoaded = () => {
+      setLoadingJsqr(false);
+    };
+
+    if (!script) {
+      script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+
+    if ((window as any).jsQR) {
+      setLoadingJsqr(false);
+    } else {
+      script.addEventListener('load', onScriptLoaded);
+    }
+
+    return () => {
+      if (script) {
+        script.removeEventListener('load', onScriptLoaded);
+      }
+    };
+  }, []);
+
+  // Stop camera stream
+  const stopCamera = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  };
+
+  // Start camera stream
+  const startCamera = async () => {
+    setErrorMsg(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.play();
+        setCameraActive(true);
+      }
+    } catch (err: any) {
+      console.error('Camera access error:', err);
+      setErrorMsg('Could not access camera. Please verify camera permissions.');
+    }
+  };
+
+  // Run camera scan loop when camera & jsQR are ready
+  useEffect(() => {
+    if (loadingJsqr || successData) return;
+
+    startCamera();
+
+    return () => {
+      stopCamera();
+    };
+  }, [loadingJsqr, successData]);
+
+  // Decode loop
+  useEffect(() => {
+    if (!cameraActive || !videoRef.current || successData) return;
+
+    const canvas = canvasRef.current || document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let lastScanTime = 0;
+
+    const tick = () => {
+      if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && ctx) {
+        const video = videoRef.current;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        const now = Date.now();
+        // Decode every 250ms for performance
+        if (now - lastScanTime > 250) {
+          lastScanTime = now;
+          const jsQRDecoder = (window as any).jsQR;
+          if (jsQRDecoder) {
+            const code = jsQRDecoder(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: 'dontInvert'
+            });
+            
+            if (code && code.data) {
+              try {
+                const payload = JSON.parse(code.data);
+                if (payload.meetingId && payload.memberId) {
+                  // Found valid code!
+                  playBeep();
+                  stopCamera();
+                  
+                  // Send to API
+                  authApi.scanAttendance(payload.meetingId, payload.memberId)
+                    .then(res => {
+                      setSuccessData({
+                        memberName: res.memberName,
+                        meetingTitle: res.meetingTitle,
+                        prokerName: res.prokerName
+                      });
+                      onSuccess(res);
+                    })
+                    .catch(err => {
+                      console.error(err);
+                      setErrorMsg(err.response?.data?.message || 'Attendance request failed.');
+                    });
+                  return;
+                }
+              } catch (e) {
+                // Invalid JSON code, ignore
+              }
+            }
+          }
+        }
+      }
+      if (!successData) {
+        animationFrameRef.current = requestAnimationFrame(tick);
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [cameraActive, successData]);
+
+  // Video Ref callback
+  const setVideoRef = (el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card animate-slideup" style={{ maxWidth: '420px', padding: '24px' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 className="modal-title" style={{ margin: 0, fontSize: '16px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="spinner" style={{ width: '12px', height: '12px', display: successData ? 'none' : 'inline-block' }}></span>
+              Scan Attendance QR
+            </span>
+          </h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>✕</button>
+        </div>
+
+        {loadingJsqr && !successData && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <div className="spinner" style={{ margin: '0 auto 12px', width: '28px', height: '28px' }}></div>
+            <p style={{ margin: 0, fontSize: '13px' }}>Initializing camera engine...</p>
+          </div>
+        )}
+
+        {!loadingJsqr && !successData && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            {errorMsg && (
+              <div style={{ width: '100%', padding: '12px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', color: 'var(--danger)', fontSize: '12.5px', textAlign: 'center' }}>
+                {errorMsg}
+                <button onClick={startCamera} style={{ display: 'block', margin: '8px auto 0', padding: '4px 12px', background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>Try Again</button>
+              </div>
+            )}
+
+            <div style={{ position: 'relative', width: '100%', height: '280px', borderRadius: '12px', overflow: 'hidden', background: '#000', border: '2px solid var(--card-border)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <video 
+                ref={setVideoRef}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+              
+              {/* Laser overlay animation */}
+              <div style={{
+                position: 'absolute',
+                top: '15%',
+                left: '15%',
+                right: '15%',
+                bottom: '15%',
+                border: '2px dashed rgba(255, 255, 255, 0.5)',
+                borderRadius: '8px',
+                boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.45)',
+                pointerEvents: 'none'
+              }}>
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '3px',
+                  background: 'var(--secondary-blue)',
+                  boxShadow: '0 0 10px var(--secondary-blue)',
+                  animation: 'scanLaser 2s linear infinite'
+                }} className="scan-laser-bar"></div>
+              </div>
+            </div>
+            
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
+              Align the member's attendance QR code inside the target window to scan automatically.
+            </p>
+          </div>
+        )}
+
+        {successData && (
+          <div style={{ textAlign: 'center', padding: '20px 10px' }}>
+            <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', marginBottom: '16px', fontWeight: 'bold' }}>✓</div>
+            <h4 style={{ margin: '0 0 8px', fontSize: '16px', color: 'var(--primary-navy)', fontWeight: 700 }}>Attendance Recorded!</h4>
+            <p style={{ margin: '0 0 16px', fontSize: '13.5px', color: 'var(--text-dark)' }}>
+              <strong>{successData.memberName}</strong> has been checked in as <strong>Present</strong>.
+            </p>
+            
+            <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid var(--card-border)', fontSize: '12px', textAlign: 'left', marginBottom: '24px' }}>
+              <div style={{ marginBottom: '6px' }}><span style={{ color: 'var(--text-muted)' }}>Meeting:</span> <strong style={{ color: 'var(--primary-navy)' }}>{successData.meetingTitle}</strong></div>
+              <div><span style={{ color: 'var(--text-muted)' }}>Program:</span> <strong style={{ color: 'var(--primary-navy)' }}>{successData.prokerName}</strong></div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button 
+                onClick={() => {
+                  setSuccessData(null);
+                  setErrorMsg(null);
+                }} 
+                className="btn-primary-sm" 
+                style={{ height: '36px', padding: '0 20px' }}
+              >
+                Scan Next
+              </button>
+              <button 
+                onClick={onClose} 
+                className="btn-primary-sm" 
+                style={{ height: '36px', padding: '0 20px', background: 'var(--text-muted)' }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ErrorPage Component
+const ErrorPage = ({ embedded = false, code, message }: { embedded?: boolean; code?: string | number; message?: string }) => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  
+  // Resolve code and message
+  const errorCode = code || searchParams.get('code') || '404';
+  
+  let title = 'Error';
+  let description = 'An unexpected error occurred. Please try again later.';
+  let icon = <AlertCircle size={48} color="var(--danger)" />;
+
+  switch (String(errorCode)) {
+    case '400':
+      title = 'Bad Request';
+      description = 'The server could not understand the request due to invalid syntax. Please verify your input.';
+      icon = <AlertTriangle size={48} color="var(--warning)" />;
+      break;
+    case '403':
+      title = 'Access Denied';
+      description = 'You do not have permission to view or access this resource. If you believe this is an error, contact your administrator.';
+      icon = <ShieldAlert size={48} color="var(--danger)" />;
+      break;
+    case '404':
+      title = 'Page Not Found';
+      description = 'The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.';
+      icon = <AlertCircle size={48} color="var(--secondary-blue)" />;
+      break;
+    case '419':
+      title = 'Session Expired';
+      description = 'Your session has expired or timed out due to inactivity. Please sign in again to restore access.';
+      icon = <RefreshCw size={48} color="var(--warning)" />;
+      break;
+    case '500':
+      title = 'Internal Server Error';
+      description = 'The server encountered an internal error or misconfiguration and was unable to complete your request.';
+      icon = <ShieldAlert size={48} color="var(--danger)" />;
+      break;
+  }
+
+  if (message) {
+    description = message;
+  }
+
+  const handleAction = () => {
+    if (errorCode === '419') {
+      localStorage.clear();
+      sessionStorage.clear();
+      navigate('/login');
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
+  const containerStyle: React.CSSProperties = embedded
+    ? {
+        padding: '40px 24px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        minHeight: '400px',
+      }
+    : {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        minHeight: '100vh',
+        background: 'radial-gradient(circle at center, var(--primary-navy) 0%, #020617 100%)',
+        padding: '24px',
+      };
+
+  return (
+    <div style={containerStyle}>
+      <div 
+        className="theme-card animate-slideup" 
+        style={{
+          maxWidth: '480px',
+          width: '100%',
+          padding: '40px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(16px)',
+          borderRadius: '16px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.03)',
+            padding: '20px',
+            borderRadius: '50%',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            boxShadow: '0 0 30px rgba(37, 99, 235, 0.1)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            {icon}
+          </div>
+        </div>
+
+        <h1 style={{
+          fontSize: '72px',
+          fontWeight: 900,
+          background: 'linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          margin: '0 0 8px 0',
+          lineHeight: '1',
+          letterSpacing: '-2px',
+        }}>
+          {errorCode}
+        </h1>
+
+        <h2 style={{
+          fontSize: '24px',
+          fontWeight: 700,
+          color: '#ffffff',
+          margin: '0 0 16px 0',
+        }}>
+          {title}
+        </h2>
+
+        <p style={{
+          fontSize: '15px',
+          lineHeight: '1.6',
+          color: 'var(--text-muted)',
+          margin: '0 0 32px 0',
+        }}>
+          {description}
+        </p>
+
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          {errorCode !== '419' && (
+            <button
+              onClick={() => navigate(-1)}
+              className="btn-primary-sm"
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--card-border)',
+                color: '#ffffff',
+                height: '42px',
+                padding: '0 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <ArrowLeft size={16} />
+              <span>Go Back</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleAction}
+            className="btn-primary-sm"
+            style={{
+              background: 'linear-gradient(135deg, var(--secondary-blue), #1d4ed8)',
+              border: 'none',
+              color: '#ffffff',
+              height: '42px',
+              padding: '0 24px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)',
+            }}
+          >
+            {errorCode === '419' ? (
+              <>
+                <LogIn size={16} />
+                <span>Sign In Again</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw size={16} />
+                <span>Return Home</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -8363,7 +9191,7 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      setError('Username dan password tidak boleh kosong.');
+      setError('Username and password cannot be empty.');
       return;
     }
 
@@ -8386,7 +9214,7 @@ const Login = () => {
       }
     } catch (err: any) {
       console.error(err);
-      const message = err.response?.data?.message || 'Terjadi kesalahan saat masuk. Silakan coba lagi.';
+      const message = err.response?.data?.message || 'An error occurred during login. Please try again.';
       setError(Array.isArray(message) ? message[0] : message);
     } finally {
       setLoading(false);
@@ -8407,8 +9235,8 @@ const Login = () => {
               <Lock size={26} />
             )}
           </div>
-          <h1 className="login-title">{systemSettings?.systemname || 'Akses Akun'}</h1>
-          <p className="login-subtitle">Silakan login dengan akun Anda</p>
+          <h1 className="login-title">{systemSettings?.systemname || 'Account Access'}</h1>
+          <p className="login-subtitle">Please sign in to your account</p>
         </div>
 
         {error && (
@@ -8427,7 +9255,7 @@ const Login = () => {
                 id="username"
                 type="text"
                 className="form-input"
-                placeholder="Masukkan username"
+                placeholder="Enter your username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={loading}
@@ -8443,7 +9271,7 @@ const Login = () => {
                 id="password"
                 type="password"
                 className="form-input"
-                placeholder="Masukkan password"
+                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
@@ -8455,22 +9283,22 @@ const Login = () => {
             {loading ? (
               <>
                 <div className="spinner"></div>
-                <span>Memproses...</span>
+                <span>Processing...</span>
               </>
             ) : (
-              <span>Masuk</span>
+              <span>Sign In</span>
             )}
           </button>
         </form>
 
         <div className="demo-accounts">
-          <p>Demo akun (Klik untuk mengisi):</p>
+          <p>Demo accounts (Click to auto-fill):</p>
           <div className="demo-buttons-grid">
             <button
               type="button"
               className="demo-btn"
               onClick={() => handleQuickLogin('superadmin', 'superadmin')}
-              title="Klik untuk mengisi data Superadmin"
+              title="Click to fill Superadmin credentials"
             >
               <span className="demo-role">Superadmin</span>
               <span className="demo-divider">/</span>
@@ -8480,9 +9308,9 @@ const Login = () => {
               type="button"
               className="demo-btn"
               onClick={() => handleQuickLogin('student', 'student')}
-              title="Klik untuk mengisi data Siswa"
+              title="Click to fill Student credentials"
             >
-              <span className="demo-role">Siswa (Student)</span>
+              <span className="demo-role">Student</span>
               <span className="demo-divider">/</span>
               <code className="demo-creds">student</code>
             </button>
@@ -8490,9 +9318,9 @@ const Login = () => {
               type="button"
               className="demo-btn"
               onClick={() => handleQuickLogin('school', 'school')}
-              title="Klik untuk mengisi data Sekolah"
+              title="Click to fill School credentials"
             >
-              <span className="demo-role">Sekolah (School)</span>
+              <span className="demo-role">School</span>
               <span className="demo-divider">/</span>
               <code className="demo-creds">school</code>
             </button>
@@ -8500,9 +9328,9 @@ const Login = () => {
               type="button"
               className="demo-btn"
               onClick={() => handleQuickLogin('employer', 'employer')}
-              title="Klik untuk mengisi data Mitra"
+              title="Click to fill Employer credentials"
             >
-              <span className="demo-role">Mitra (Employer)</span>
+              <span className="demo-role">Employer</span>
               <span className="demo-divider">/</span>
               <code className="demo-creds">employer</code>
             </button>
@@ -8526,6 +9354,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/error" element={<ErrorPage />} />
         <Route 
           path="/*" 
           element={
