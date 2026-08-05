@@ -88,9 +88,352 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   return <>{children}</>;
 };
 
+const translations = {
+  id: {
+    mainMenu: "Menu Utama",
+    dashboard: "Dasbor",
+    candidates: "Kandidat OSIS",
+    proker: "Program Kerja",
+    orgStructure: "Struktur Organisasi",
+    osisCash: "Uang Kas OSIS",
+    perfEval: "Evaluasi Kinerja",
+    activityLog: "Log Aktivitas",
+    recycleBin: "Kotak Sampah",
+    permissions: "Hak Akses",
+    manageData: "Kelola Data",
+    manageClass: "Kelola Kelas",
+    manageGrade: "Kelola Tingkatan",
+    manageMajor: "Kelola Jurusan",
+    managePeriod: "Kelola Periode",
+    manageUser: "Kelola Pengguna",
+    manageRole: "Kelola Peran",
+    manageSection: "Kelola Seksi",
+    settings: "Pengaturan",
+    systemSetting: "Pengaturan Sistem",
+    backupDb: "Cadangkan Database",
+    account: "Akun",
+    logout: "Keluar",
+  },
+  en: {
+    mainMenu: "Main Menu",
+    dashboard: "Dashboard",
+    candidates: "OSIS Candidates",
+    proker: "Work Programs",
+    orgStructure: "Organization Structure",
+    osisCash: "OSIS Cash",
+    perfEval: "Performance Evaluation",
+    activityLog: "Activity Log",
+    recycleBin: "Recycle Bin",
+    permissions: "Permissions",
+    manageData: "Manage Data",
+    manageClass: "Manage Class",
+    manageGrade: "Manage Grade",
+    manageMajor: "Manage Major",
+    managePeriod: "Manage Period",
+    manageUser: "Manage User",
+    manageRole: "Manage Role",
+    manageSection: "Manage Section",
+    settings: "Settings",
+    systemSetting: "System Setting",
+    backupDb: "Backup Database",
+    account: "Account",
+    logout: "Logout",
+  }
+};
+
+const messageTranslations: Record<string, string> = {
+  // Common Buttons & Labels
+  "Cancel": "Batal",
+  "Confirm": "Konfirmasi",
+  "Confirm Action": "Konfirmasi Tindakan",
+  "Save Changes": "Simpan Perubahan",
+  "Submit My Vote": "Kirim Pilihan Saya",
+  "Confirm Voting Choice": "Konfirmasi Pilihan Voting",
+  "Submit": "Kirim",
+  "Search...": "Cari...",
+  "Loading...": "Memuat...",
+  "Actions": "Aksi",
+  "Close": "Tutup",
+  
+  // Page Titles
+  "Menu Access Permissions Control": "Pengaturan Hak Akses Menu",
+  "System Overview Dashboard": "Panel Ringkasan Sistem",
+  "OSIS Candidates": "Kandidat OSIS",
+  "OSIS Work Programs": "Program Kerja OSIS",
+  "Work Programs": "Program Kerja",
+  "OSIS Organization Structure": "Struktur Organisasi OSIS",
+  "Organization Structure": "Struktur Organisasi",
+  "OSIS Cash Management": "Pengelolaan Uang Kas OSIS",
+  "OSIS Officer Performance Evaluation": "Evaluasi Kinerja Pengurus OSIS",
+  "User Activity Log": "Log Aktivitas Pengguna",
+  "Recycle Bin (Deleted Items)": "Tempat Sampah (Data Dihapus)",
+  "Database Security & Backup": "Keamanan & Cadangan Database",
+  "System Settings & Information": "Pengaturan Informasi Sistem",
+  "Recycle Bin (Deleted Data)": "Kotak Sampah (Data Terhapus)",
+  "User Activity Log (POST)": "Log Aktivitas Pengguna (POST)",
+  "OSIS Board Performance Evaluation": "Evaluasi Kinerja Pengurus OSIS",
+  "OSIS Chairperson & Vice Chairperson Candidates": "Kandidat Ketua & Wakil Ketua OSIS",
+
+  // Dialogs / Confirm Messages
+  "Are you sure you want to delete this class?": "Apakah Anda yakin ingin menghapus kelas ini?",
+  "Are you sure you want to delete this grade?": "Apakah Anda yakin ingin menghapus tingkatan ini?",
+  "Are you sure you want to delete this major?": "Apakah Anda yakin ingin menghapus jurusan ini?",
+  "Are you sure you want to delete this period?": "Apakah Anda yakin ingin menghapus periode ini?",
+  "Are you sure you want to delete this user?": "Apakah Anda yakin ingin menghapus pengguna ini?",
+  "Are you sure you want to delete this role?": "Apakah Anda yakin ingin menghapus peran ini?",
+  "Are you sure you want to delete this section?": "Apakah Anda yakin ingin menghapus seksi ini?",
+  "Are you sure you want to delete this candidate?": "Apakah Anda yakin ingin menghapus kandidat ini?",
+  "Are you sure you want to delete this work program?": "Apakah Anda yakin ingin menghapus program kerja ini?",
+  "Are you sure you want to delete this member?": "Apakah Anda yakin ingin menghapus anggota ini?",
+  "Are you sure you want to delete this proposal?": "Apakah Anda yakin ingin menghapus proposal ini?",
+  "Are you sure you want to delete this report?": "Apakah Anda yakin ingin menghapus laporan ini?",
+  "Are you sure you want to delete this meeting?": "Apakah Anda yakin ingin menghapus pertemuan ini?",
+  "Are you sure you want to delete this division?": "Apakah Anda yakin ingin menghapus divisi ini?",
+  "Are you sure you want to delete this documentation?": "Apakah Anda yakin ingin menghapus dokumentasi ini?",
+  "Are you sure you want to delete this attendance record?": "Apakah Anda yakin ingin menghapus catatan kehadiran ini?",
+  "Are you sure you want to restore this item?": "Apakah Anda yakin ingin memulihkan item ini?",
+  "Are you sure you want to delete this item permanently?": "Apakah Anda yakin ingin menghapus item ini secara permanen?",
+  "Are you sure you want to clear the recycle bin? This action is irreversible.": "Apakah Anda yakin ingin mengosongkan tempat sampah? Tindakan ini tidak dapat dibatalkan.",
+
+  // Success Toasts
+  "Class deleted successfully": "Kelas berhasil dihapus",
+  "Class created successfully": "Kelas berhasil dibuat",
+  "Class updated successfully": "Kelas berhasil diperbarui",
+  
+  "Grade deleted successfully": "Tingkatan berhasil dihapus",
+  "Grade created successfully": "Tingkatan berhasil dibuat",
+  "Grade updated successfully": "Tingkatan berhasil diperbarui",
+
+  "Major deleted successfully": "Jurusan berhasil dihapus",
+  "Major created successfully": "Jurusan berhasil dibuat",
+  "Major updated successfully": "Jurusan berhasil diperbarui",
+
+  "Period deleted successfully": "Periode berhasil dihapus",
+  "Period created successfully": "Periode berhasil dibuat",
+  "Period updated successfully": "Periode berhasil diperbarui",
+
+  "User deleted successfully": "Pengguna berhasil dihapus",
+  "User created successfully": "Pengguna berhasil dibuat",
+  "User updated successfully": "Pengguna berhasil diperbarui",
+
+  "Role deleted successfully": "Peran berhasil dihapus",
+  "Role created successfully": "Peran berhasil dibuat",
+  "Role updated successfully": "Peran berhasil diperbarui",
+
+  "Section deleted successfully": "Seksi berhasil dihapus",
+  "Section created successfully": "Seksi berhasil dibuat",
+  "Section updated successfully": "Seksi berhasil diperbarui",
+
+  "Candidate deleted successfully": "Kandidat berhasil dihapus",
+  "Candidate created successfully": "Kandidat berhasil dibuat",
+  "Candidate updated successfully": "Kandidat berhasil diperbarui",
+
+  "Work program deleted successfully": "Program Kerja berhasil dihapus",
+  "Work program created successfully": "Program Kerja berhasil dibuat",
+  "Work program updated successfully": "Program Kerja berhasil diperbarui",
+
+  "Proposal created successfully": "Proposal berhasil dibuat",
+  "Proposal updated successfully": "Proposal berhasil diperbarui",
+  "Proposal deleted successfully": "Proposal berhasil dihapus",
+
+  "Report created successfully": "Laporan berhasil dibuat",
+  "Report updated successfully": "Laporan berhasil diperbarui",
+  "Report deleted successfully": "Laporan berhasil dihapus",
+
+  "Meeting created successfully": "Pertemuan berhasil dibuat",
+  "Meeting updated successfully": "Pertemuan berhasil diperbarui",
+  "Meeting deleted successfully": "Pertemuan berhasil dihapus",
+
+  "Documentation created successfully": "Dokumentasi berhasil dibuat",
+  "Documentation updated successfully": "Dokumentasi berhasil diperbarui",
+  "Documentation deleted successfully": "Dokumentasi berhasil dihapus",
+
+  "Division created successfully": "Divisi berhasil dibuat",
+  "Division updated successfully": "Divisi berhasil diperbarui",
+  "Division deleted successfully": "Divisi berhasil dihapus",
+
+  "Member created successfully": "Anggota berhasil dibuat",
+  "Member updated successfully": "Anggota berhasil diperbarui",
+  "Member deleted successfully": "Anggota berhasil dihapus",
+
+  "Settings updated successfully": "Pengaturan berhasil diperbarui",
+  "Settings saved successfully": "Pengaturan berhasil disimpan",
+  "Profile updated successfully": "Profil berhasil diperbarui",
+  "Password updated successfully": "Kata sandi berhasil diperbarui",
+  "Database backup created successfully": "Cadangan database berhasil dibuat",
+  "Vote submitted successfully": "Pilihan berhasil dikirim",
+  "Logged in successfully": "Berhasil masuk",
+  "Logged out successfully": "Berhasil keluar",
+  "Item restored successfully": "Item berhasil dipulihkan",
+  "Item permanently deleted": "Item berhasil dihapus secara permanen",
+  "Recycle bin cleared successfully": "Tempat sampah berhasil dikosongkan",
+
+  // Candidate page translations
+  "Add Candidate": "Tambah Kandidat",
+  "List of OSIS candidate pairs competing in the active election period.": "Daftar pasangan calon OSIS yang berkompetisi pada periode pemilihan aktif.",
+  "Search candidate name, class, vision...": "Cari nama kandidat, kelas, visi...",
+  "All Periods": "Semua Periode",
+  "PAIR": "PASLON",
+  "Period": "Periode",
+  "Vision:": "Visi:",
+  "Mission:": "Misi:",
+  "No candidate data matches your search.": "Tidak ada data kandidat yang cocok dengan pencarian Anda.",
+
+  // Proker page translations
+  "Add Program": "Tambah Program",
+  "Total Programs": "Total Program",
+  "Planned": "Rencana",
+  "In Progress": "Berjalan",
+  "Completed": "Selesai",
+  "OSIS Work Program Registry": "Registrasi Program Kerja OSIS",
+  "No work programs have been structured for this period yet.": "Belum ada program kerja yang disusun untuk periode ini.",
+  "Target:": "Target:",
+
+  // Proker detail page translations
+  "Back": "Kembali",
+  "Program Status:": "Status Program:",
+  "Overview": "Ringkasan",
+  "Proposal & Reports": "Proposal & Laporan",
+  "Meetings": "Pertemuan",
+  "Divisions": "Divisi",
+  "Members": "Anggota",
+  "Attendance": "Kehadiran",
+  "Documentation": "Dokumentasi",
+  "Proposals Submitted": "Proposal Diajukan",
+  "Scheduled Meetings": "Pertemuan Terjadwal",
+  "Committee Divisions": "Divisi Kepanitiaan",
+  "Member Count": "Jumlah Anggota",
+  "Activity Description": "Deskripsi Kegiatan",
+  "No description added for this work program.": "Tidak ada deskripsi yang ditambahkan untuk program kerja ini.",
+  "Activity Proposal": "Proposal Kegiatan",
+  "LPJ Report": "Laporan LPJ",
+
+  // Modal titles
+  "Add New Class": "Tambah Kelas Baru",
+  "Edit Class": "Ubah Kelas",
+  "Add New Grade": "Tambah Tingkatan Baru",
+  "Edit Grade": "Ubah Tingkatan",
+  "Add New Major": "Tambah Jurusan Baru",
+  "Edit Major": "Ubah Jurusan",
+  "Add New Period": "Tambah Periode Baru",
+  "Edit Period": "Ubah Periode",
+  "Add New User": "Tambah Pengguna Baru",
+  "Edit User": "Ubah Pengguna",
+  "Confirm Password Reset": "Konfirmasi Reset Kata Sandi",
+  "Add New OSIS Candidate": "Tambah Kandidat OSIS Baru",
+  "Edit OSIS Candidate": "Ubah Kandidat OSIS",
+  "Add New OSIS Work Program": "Tambah Program Kerja OSIS Baru",
+  "Edit OSIS Work Program": "Ubah Program Kerja OSIS",
+  "Add Organization Member": "Tambah Anggota Organisasi",
+  "Edit Organization Member": "Ubah Anggota Organisasi",
+  
+  // Scanner modal translations
+  "Scan Attendance QR": "Pindai QR Kehadiran",
+  "Initializing camera engine...": "Menginisialisasi kamera...",
+  "Could not access camera. Please verify camera permissions.": "Tidak dapat mengakses kamera. Harap verifikasi izin kamera.",
+  "Try Again": "Coba Lagi",
+  "Align the member's attendance QR code inside the target window to scan automatically.": "Sejajarkan kode QR kehadiran anggota di dalam kotak target untuk memindai secara otomatis.",
+  "Attendance Recorded!": "Kehadiran Tercatat!",
+  "Meeting:": "Pertemuan:",
+  "Program:": "Program:",
+  "Scan Next": "Pindai Berikutnya",
+  "Done": "Selesai",
+  
+  // Dashboard translations
+  "Account Information": "Informasi Akun",
+  "Username": "Nama Pengguna",
+  "Access Level": "Tingkat Akses",
+  "Registered Email": "Email Terdaftar",
+  "Role / Position": "Peran / Jabatan",
+  "Level Details": "Rincian Tingkatan",
+  "Class": "Kelas",
+  "Grade": "Tingkat",
+  "Major": "Jurusan",
+  "Student detail data not found.": "Data detail siswa tidak ditemukan.",
+  "This account level has school administrative authority.": "Tingkat akun ini memiliki otoritas administratif sekolah.",
+  "Institution": "Institusi",
+  "School Institution": "Institusi Sekolah",
+  "Status": "Status",
+  "Active": "Aktif",
+  "This account level is designated for employers / partner industries.": "Tingkat akun ini ditujukan untuk pemberi kerja / industri mitra.",
+  "Partnership": "Kemitraan",
+  "Industry & Labor Market": "Mitra Industri & Bursa Kerja",
+  "OSIS Quick Actions": "Tindakan Cepat OSIS",
+  "Perform administrative actions and scan attendance code.": "Lakukan tindakan administratif dan pindai kode kehadiran.",
+  "Scan Attendance QR Code": "Pindai Kode QR Kehadiran",
+
+  // Manage Class translations
+  "Manage Class Data": "Kelola Data Kelas",
+  "Add Class": "Tambah Kelas",
+  "Manage registered class metadata within the system.": "Kelola metadata kelas terdaftar dalam sistem.",
+
+  // Manage Grade translations
+  "Manage Grade (Level) Data": "Kelola Data Tingkatan Kelas",
+  "Add Grade": "Tambah Tingkatan",
+  "Configuration of active grade levels in school.": "Konfigurasi tingkat kelas aktif di sekolah.",
+
+  // Manage Major translations
+  "Manage Major Data": "Kelola Data Jurusan",
+  "Add Major": "Tambah Jurusan",
+  "Configure registered school majors and departments.": "Konfigurasi jurusan dan departemen sekolah terdaftar.",
+
+  // Manage Role translations
+  "Manage Role (Position) Data": "Kelola Data Peran (Jabatan)",
+  "Add Role": "Tambah Peran",
+  "Configure administrative roles and positions within OSIS board and committee members.": "Konfigurasi peran dan jabatan administratif di dalam pengurus dan anggota komite OSIS.",
+
+  // Manage Section translations
+  "Manage Section (Sekbid) Data": "Kelola Data Seksi Bidang (Sekbid)",
+  "Add Section": "Tambah Seksi",
+  "Configure committee sections and functional departments (Seksi Bidang) of OSIS.": "Konfigurasi seksi komite dan departemen fungsional (Seksi Bidang) OSIS.",
+
+  // Manage Period translations
+  "Manage Period & Voting Timeline": "Kelola Periode & Jadwal Voting",
+  "Add Period": "Tambah Periode",
+  "Configure active academic years for OSIS periods and define duration timelines for e-voting execution.": "Konfigurasi tahun ajaran aktif untuk periode OSIS dan tentukan jadwal durasi pelaksanaan e-voting.",
+
+  // Manage User translations
+  "Manage System Users": "Kelola Pengguna Sistem",
+  "Add User": "Tambah Pengguna",
+  "List of all user accounts registered in the database along with their authorization levels.": "Daftar seluruh akun pengguna yang terdaftar di database beserta tingkat otorisasi mereka."
+};
+
+const translateText = (text: string, currentLang: 'id' | 'en'): string => {
+  if (currentLang === 'en' || !text) return text;
+  
+  if (messageTranslations[text]) {
+    return messageTranslations[text];
+  }
+  
+  let translated = text;
+  Object.entries(messageTranslations).forEach(([enKey, idVal]) => {
+    if (translated.includes(enKey)) {
+      translated = translated.split(enKey).join(idVal);
+    }
+  });
+  
+  return translated;
+};
+
 // Home Component (Dashboard)
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [lang, setLang] = useState<'id' | 'en'>(() => (localStorage.getItem('lang') as 'id' | 'en') || 'id');
+
+  const toggleLanguage = () => {
+    const nextLang = lang === 'id' ? 'en' : 'id';
+    setLang(nextLang);
+    localStorage.setItem('lang', nextLang);
+  };
+
+  const t = (key: keyof typeof translations['id']) => {
+    return translations[lang][key] || key;
+  };
+
+  const tText = (text: string) => {
+    return translateText(text, lang);
+  };
+
   const [userData, setUserData] = useState<any>(null);
   const [systemSettings, setSystemSettings] = useState<SystemResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -168,6 +511,13 @@ const Dashboard = () => {
     message: string;
     onConfirm: () => void | Promise<void>;
   } | null>(null);
+
+  const [rejectionModal, setRejectionModal] = useState<{
+    title: string;
+    placeholder: string;
+    onConfirm: (reason: string) => void | Promise<void>;
+  } | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   // Dynamic Candidates State
   const [candidates, setCandidates] = useState<any[]>(() => {
@@ -2133,10 +2483,10 @@ const Dashboard = () => {
             <div>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <CheckSquare size={20} color="var(--secondary-blue)" />
-                Access Permissions
+                {tText("Access Permissions")}
               </h2>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0', textAlign: 'left' }}>
-                Select the checkboxes to grant menu and feature access for each role.
+                {tText("Select the checkboxes to grant menu and feature access for each role.")}
               </p>
             </div>
 
@@ -2144,7 +2494,7 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th style={{ minWidth: '220px' }}>Main Menu / Feature</th>
+                    <th style={{ minWidth: '220px' }}>{tText("Main Menu / Feature")}</th>
                     {rolesList.map(r => (
                       <th key={r.key} style={{ textAlign: 'center', minWidth: '110px' }}>{r.label}</th>
                     ))}
@@ -2154,13 +2504,13 @@ const Dashboard = () => {
                   {permissionsLoading ? (
                     <tr>
                       <td colSpan={rolesList.length + 1} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                        Loading access permissions...
+                        {tText("Loading access permissions...")}
                       </td>
                     </tr>
                   ) : (
                     menuKeysList.map(menu => (
                       <tr key={menu.key}>
-                        <td style={{ fontWeight: 700, color: 'var(--primary-navy)' }}>{menu.label}</td>
+                        <td style={{ fontWeight: 700, color: 'var(--primary-navy)' }}>{tText(menu.label)}</td>
                         {rolesList.map(role => {
                           const perm = allPermissions.find(p => (p.roleName || '').trim().toLowerCase() === role.key.trim().toLowerCase() && p.menuKey === menu.key);
                           const isAllowed = perm ? perm.allowed : false;
@@ -2198,18 +2548,18 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Class Name</th>
-                      <th>Grade / Level</th>
-                      <th>Major</th>
-                      <th>Deleted At</th>
-                      <th style={{ textAlign: 'center' }}>Action</th>
+                      <th>{tText("Class Name")}</th>
+                      <th>{tText("Grade / Level")}</th>
+                      <th>{tText("Major")}</th>
+                      <th>{tText("Deleted At")}</th>
+                      <th style={{ textAlign: 'center' }}>{tText("Action")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.classes.length === 0 ? (
                       <tr>
                         <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Class recycle bin is empty.
+                          {tText("Class recycle bin is empty.")}
                         </td>
                       </tr>
                     ) : (
@@ -2218,14 +2568,14 @@ const Dashboard = () => {
                           <td style={{ fontWeight: 700 }}>{item.classname}</td>
                           <td>{item.grade?.gradename || '-'}</td>
                           <td>{item.major?.majorname || '-'}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('class', item.id)}
                               className="btn-primary-sm"
                               style={{ background: 'var(--success)', color: '#fff', border: 'none', padding: '4px 10px', height: 'auto', fontSize: '12px' }}
                             >
-                              Restore
+                              {tText("Restore")}
                             </button>
                           </td>
                         </tr>
@@ -2239,30 +2589,30 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Grade Name</th>
-                      <th>Deleted At</th>
-                      <th style={{ textAlign: 'center' }}>Action</th>
+                      <th>{tText("Grade Name")}</th>
+                      <th>{tText("Deleted At")}</th>
+                      <th style={{ textAlign: 'center' }}>{tText("Action")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.grades.length === 0 ? (
                       <tr>
                         <td colSpan={3} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Grade recycle bin is empty.
+                          {tText("Grade recycle bin is empty.")}
                         </td>
                       </tr>
                     ) : (
                       bin.grades.map((item: any) => (
                         <tr key={item.id}>
                           <td style={{ fontWeight: 700 }}>{item.gradename}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('grade', item.id)}
                               className="btn-primary-sm"
                               style={{ background: 'var(--success)', color: '#fff', border: 'none', padding: '4px 10px', height: 'auto', fontSize: '12px' }}
                             >
-                              Restore
+                              {tText("Restore")}
                             </button>
                           </td>
                         </tr>
@@ -2276,17 +2626,17 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Major Name</th>
-                      <th>Major Code</th>
-                      <th>Deleted At</th>
-                      <th style={{ textAlign: 'center' }}>Action</th>
+                      <th>{tText("Major Name")}</th>
+                      <th>{tText("Major Code")}</th>
+                      <th>{tText("Deleted At")}</th>
+                      <th style={{ textAlign: 'center' }}>{tText("Action")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.majors.length === 0 ? (
                       <tr>
                         <td colSpan={4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Major recycle bin is empty.
+                          {tText("Major recycle bin is empty.")}
                         </td>
                       </tr>
                     ) : (
@@ -2294,14 +2644,14 @@ const Dashboard = () => {
                         <tr key={item.id}>
                           <td style={{ fontWeight: 700 }}>{item.majorname}</td>
                           <td style={{ fontWeight: 600 }}>{item.majorcode}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('major', item.id)}
                               className="btn-primary-sm"
                               style={{ background: 'var(--success)', color: '#fff', border: 'none', padding: '4px 10px', height: 'auto', fontSize: '12px' }}
                             >
-                              Restore
+                              {tText("Restore")}
                             </button>
                           </td>
                         </tr>
@@ -2315,20 +2665,20 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Username</th>
-                      <th>Level</th>
-                      <th>Email</th>
-                      <th>Role / Position</th>
-                      <th>Class</th>
-                      <th>Deleted At</th>
-                      <th style={{ textAlign: 'center' }}>Action</th>
+                      <th>{tText("Username")}</th>
+                      <th>{tText("Level")}</th>
+                      <th>{tText("Email")}</th>
+                      <th>{tText("Role / Position")}</th>
+                      <th>{tText("Class")}</th>
+                      <th>{tText("Deleted At")}</th>
+                      <th style={{ textAlign: 'center' }}>{tText("Action")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.users.length === 0 ? (
                       <tr>
                         <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          User recycle bin is empty.
+                          {tText("User recycle bin is empty.")}
                         </td>
                       </tr>
                     ) : (
@@ -2343,14 +2693,14 @@ const Dashboard = () => {
                           <td>{item.email}</td>
                           <td>{item.role}</td>
                           <td>{item.classname}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('user', item.id)}
                               className="btn-primary-sm"
                               style={{ background: 'var(--success)', color: '#fff', border: 'none', padding: '4px 10px', height: 'auto', fontSize: '12px' }}
                             >
-                              Restore
+                              {tText("Restore")}
                             </button>
                           </td>
                         </tr>
@@ -2364,30 +2714,30 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Role Name</th>
-                      <th>Deleted At</th>
-                      <th style={{ textAlign: 'center' }}>Action</th>
+                      <th>{tText("Role Name")}</th>
+                      <th>{tText("Deleted At")}</th>
+                      <th style={{ textAlign: 'center' }}>{tText("Action")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.roles.length === 0 ? (
                       <tr>
                         <td colSpan={3} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Role recycle bin is empty.
+                          {tText("Role recycle bin is empty.")}
                         </td>
                       </tr>
                     ) : (
                       bin.roles.map((item: any) => (
                         <tr key={item.id}>
                           <td style={{ fontWeight: 700 }}>{item.rolename}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('role', item.id)}
                               className="btn-primary-sm"
                               style={{ background: 'var(--success)', color: '#fff', border: 'none', padding: '4px 10px', height: 'auto', fontSize: '12px' }}
                             >
-                              Restore
+                              {tText("Restore")}
                             </button>
                           </td>
                         </tr>
@@ -2401,30 +2751,30 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Section Name</th>
-                      <th>Deleted At</th>
-                      <th style={{ textAlign: 'center' }}>Action</th>
+                      <th>{tText("Section Name")}</th>
+                      <th>{tText("Deleted At")}</th>
+                      <th style={{ textAlign: 'center' }}>{tText("Action")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bin.sections.length === 0 ? (
                       <tr>
                         <td colSpan={3} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          Section recycle bin is empty.
+                          {tText("Section recycle bin is empty.")}
                         </td>
                       </tr>
                     ) : (
                       bin.sections.map((item: any) => (
                         <tr key={item.id}>
                           <td style={{ fontWeight: 700 }}>{item.sectionname}</td>
-                          <td>{new Date(item.deletedAt).toLocaleString('en-US')}</td>
+                          <td>{new Date(item.deletedAt).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US')}</td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               onClick={() => handleRestoreItem('section', item.id)}
                               className="btn-primary-sm"
                               style={{ background: 'var(--success)', color: '#fff', border: 'none', padding: '4px 10px', height: 'auto', fontSize: '12px' }}
                             >
-                              Restore
+                              {tText("Restore")}
                             </button>
                           </td>
                         </tr>
@@ -2443,10 +2793,10 @@ const Dashboard = () => {
             <div>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Folder size={20} color="var(--secondary-blue)" />
-                Recycle Bin (Deleted Data)
+                {tText("Recycle Bin (Deleted Data)")}
               </h2>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0', textAlign: 'left' }}>
-                Restore previously deleted OSIS metadata or configuration items back into active datasets.
+                {tText("Restore previously deleted OSIS metadata or configuration items back into active datasets.")}
               </p>
             </div>
 
@@ -2478,7 +2828,7 @@ const Dashboard = () => {
                     whiteSpace: 'nowrap'
                   }}
                 >
-                  {tab.label}
+                  {tText(tab.label)}
                 </button>
               ))}
             </div>
@@ -2487,7 +2837,7 @@ const Dashboard = () => {
             <div className="admin-table-container custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto', paddingBottom: '16px' }}>
               {recycleBinLoading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                  Loading deleted data...
+                  {tText("Loading deleted data...")}
                 </div>
               ) : (
                 renderTabContent()
@@ -2539,10 +2889,10 @@ const Dashboard = () => {
               <div>
                 <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                   <CheckSquare size={20} color="var(--secondary-blue)" />
-                  User Activity Log (POST)
+                  {tText("User Activity Log (POST)")}
                 </h2>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                  Record of important changes and user actions in the OSIS system.
+                  {tText("Record of important changes and user actions in the OSIS system.")}
                 </p>
               </div>
             </div>
@@ -2553,7 +2903,7 @@ const Dashboard = () => {
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="Search by user, role, action, IP, or date..."
+                  placeholder={tText("Search by user, role, action, IP, or date...")}
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
@@ -2566,7 +2916,7 @@ const Dashboard = () => {
                   value={activityLogRoleFilter}
                   onChange={e => setActivityLogRoleFilter(e.target.value)}
                 >
-                  <option value="all">All Roles</option>
+                  <option value="all">{tText("All Roles")}</option>
                   <option value="superadmin">Superadmin</option>
                   <option value="admin">Admin</option>
                   <option value="president">President</option>
@@ -2585,25 +2935,25 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '180px' }}>Date & Time</th>
-                    <th>User</th>
-                    <th>Role</th>
-                    <th>IP Address</th>
-                    <th>Coordinates (Lat, Lng)</th>
-                    <th>Action</th>
+                    <th style={{ width: '180px' }}>{tText("Date & Time")}</th>
+                    <th>{tText("User")}</th>
+                    <th>{tText("Role")}</th>
+                    <th>{tText("IP Address")}</th>
+                    <th>{tText("Coordinates (Lat, Lng)")}</th>
+                    <th>{tText("Action")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {activityLogsLoading ? (
                     <tr>
                       <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                        Loading activity log data...
+                        {tText("Loading activity log data...")}
                       </td>
                     </tr>
                   ) : filteredLogs.length === 0 ? (
                     <tr>
                       <td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
-                        No activity logs found.
+                        {tText("No activity logs found.")}
                       </td>
                     </tr>
                   ) : (
@@ -2640,13 +2990,14 @@ const Dashboard = () => {
                               <a 
                                 href={mapsUrl} 
                                 target="_blank" 
+                                
                                 rel="noopener noreferrer" 
                                 style={{ color: 'var(--success)', textDecoration: 'underline', fontSize: '12.5px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                               >
                                 {log.latitude.toFixed(4)}, {log.longitude.toFixed(4)}
                               </a>
                             ) : (
-                              <span style={{ color: 'var(--text-muted)', fontSize: '12.5px', fontStyle: 'italic' }}>Tidak Ada</span>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '12.5px', fontStyle: 'italic' }}>{tText("None")}</span>
                             )}
                           </td>
                           <td style={{ fontSize: '13px', color: 'var(--text-dark)', fontWeight: 500 }}>
@@ -2809,12 +3160,12 @@ const Dashboard = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                 <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                   <TrendingUp size={20} color="var(--secondary-blue)" />
-                  OSIS Board Performance Evaluation
+                  {tText("OSIS Board Performance Evaluation")}
                 </h2>
                 
                 {/* Period Selector Dropdown */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Period:</span>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>{tText("Period:")}</span>
                   <select
                     className="form-input"
                     style={{ width: '140px', margin: 0, paddingLeft: '12px', paddingRight: '12px', paddingTop: 0, paddingBottom: 0, height: '36px', fontSize: '13px' }}
@@ -2832,39 +3183,45 @@ const Dashboard = () => {
             {/* KPI Metric Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.04) 0%, transparent 100%)' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Average Attendance</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>{tText("Average Attendance")}</span>
                 <h3 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--success)', margin: 0 }}>{overallAttendanceRate}%</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>From total meeting attendances</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{tText("From total meeting attendances")}</span>
               </div>
               
               <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.04) 0%, transparent 100%)' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Work Program Realization</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>{tText("Work Program Realization")}</span>
                 <h3 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--secondary-blue)', margin: 0 }}>{completionRate}%</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{completedProkers} of {totalProkers} programs completed</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {lang === 'id' ? (
+                    <>{completedProkers} dari {totalProkers} program selesai</>
+                  ) : (
+                    <>{completedProkers} of {totalProkers} programs completed</>
+                  )}
+                </span>
               </div>
 
               <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, transparent 100%)' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Document Compliance</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>{tText("Document Compliance")}</span>
                 <h3 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--warning)', margin: 0 }}>{docComplianceRate}%</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Proposal & LPJ Approvals</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{tText("Proposal & LPJ Approvals")}</span>
               </div>
 
               <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Total OSIS Meetings</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>{tText("Total OSIS Meetings")}</span>
                 <h3 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--primary-navy)', margin: 0 }}>{totalMeetings}</h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Coordination & technical sessions</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{tText("Coordination & technical sessions")}</span>
               </div>
             </div>
 
             {/* Member Performance Evaluation Table */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--primary-navy)', margin: 0 }}>Board Performance & Attendance Registry</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--primary-navy)', margin: 0 }}>{tText("Board Performance & Attendance Registry")}</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-soft-white)', border: '1px solid var(--card-border)', borderRadius: '6px', padding: '6px 12px', width: '260px' }}>
                   <Search size={14} color="var(--text-muted)" />
                   <input
                     type="text"
-                    placeholder="Search board member..."
+                    placeholder={tText("Search board member...")}
                     style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '13px', width: '100%', padding: 0 }}
                     value={evalSearch}
                     onChange={e => setEvalSearch(e.target.value)}
@@ -2876,19 +3233,19 @@ const Dashboard = () => {
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th>Officer Name</th>
-                      <th>Position</th>
-                      <th>Division</th>
-                      <th style={{ textAlign: 'center' }}>Attended / Total Meetings</th>
-                      <th style={{ textAlign: 'center' }}>Attendance Rate</th>
-                      <th style={{ textAlign: 'center' }}>Grade / Predicate</th>
+                      <th>{tText("Officer Name")}</th>
+                      <th>{tText("Position")}</th>
+                      <th>{tText("Division")}</th>
+                      <th style={{ textAlign: 'center' }}>{tText("Attended / Total Meetings")}</th>
+                      <th style={{ textAlign: 'center' }}>{tText("Attendance Rate")}</th>
+                      <th style={{ textAlign: 'center' }}>{tText("Grade / Predicate")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredMembers.length === 0 ? (
                       <tr>
                         <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                          No board performance data available.
+                          {tText("No board performance data available.")}
                         </td>
                       </tr>
                     ) : (
@@ -2948,11 +3305,11 @@ const Dashboard = () => {
 
             {/* Proker Evaluation Card Section */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--primary-navy)', margin: 0 }}>Document & Work Program Agenda Evaluation</h3>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--primary-navy)', margin: 0 }}>{tText("Document & Work Program Agenda Evaluation")}</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
                 {prokerDetailsList.length === 0 ? (
                   <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '24px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '8px' }}>
-                    No work programs have been structured yet.
+                    {tText("No work programs have been structured yet.")}
                   </div>
                 ) : (
                   prokerDetailsList.map(({ proker, subData }) => {
@@ -2965,28 +3322,34 @@ const Dashboard = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
                           <div>
                             <h4 style={{ margin: 0, fontSize: '14.5px', fontWeight: 700, color: 'var(--primary-navy)' }}>{proker.name}</h4>
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Target: {proker.targetDate}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{tText("Target:")} {proker.targetDate}</span>
                           </div>
                           <span className={`badge badge-${proker.status === 'Selesai' ? 'success' : proker.status === 'Berjalan' ? 'warning' : 'secondary'}`} style={{ color: proker.status === 'Selesai' ? 'var(--success)' : proker.status === 'Berjalan' ? 'var(--warning)' : 'var(--text-muted)', padding: '2px 8px', borderRadius: '4px', fontSize: '10.5px', fontWeight: 700 }}>
-                            {proker.status === 'Selesai' ? 'Completed' : proker.status === 'Berjalan' ? 'In Progress' : 'Planned'}
+                            {proker.status === 'Selesai' ? tText('Completed') : proker.status === 'Berjalan' ? tText('In Progress') : tText('Planned')}
                           </span>
                         </div>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'var(--bg-soft-white)', padding: '8px 12px', borderRadius: '6px', fontSize: '12.5px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>Total Meetings:</span>
-                            <span style={{ fontWeight: 600 }}>{totalMeetingsCount} Times</span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>Activity Proposal:</span>
-                            <span style={{ fontWeight: 700, color: hasProp ? 'var(--success)' : 'var(--danger)' }}>
-                              {hasProp ? '✓ Approved' : '✗ Not Approved'}
+                            <span style={{ color: 'var(--text-muted)' }}>{tText("Total Meetings:")}</span>
+                            <span style={{ fontWeight: 600 }}>
+                              {lang === 'id' ? (
+                                <>{totalMeetingsCount} Kali</>
+                              ) : (
+                                <>{totalMeetingsCount} Times</>
+                              )}
                             </span>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>LPJ Report:</span>
+                            <span style={{ color: 'var(--text-muted)' }}>{tText("Activity Proposal:")}</span>
+                            <span style={{ fontWeight: 700, color: hasProp ? 'var(--success)' : 'var(--danger)' }}>
+                              {hasProp ? tText('✓ Approved') : tText('✗ Not Approved')}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>{tText("LPJ Report:")}</span>
                             <span style={{ fontWeight: 700, color: hasRep ? 'var(--success)' : 'var(--danger)' }}>
-                              {hasRep ? '✓ Approved' : '✗ Not Approved'}
+                              {hasRep ? tText('✓ Approved') : tText('✗ Not Approved')}
                             </span>
                           </div>
                         </div>
@@ -3509,7 +3872,7 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Users size={20} color="var(--secondary-blue)" />
-                OSIS Chairperson & Vice Chairperson Candidates
+                {tText("OSIS Chairperson & Vice Chairperson Candidates")}
               </h2>
               {userData.role === 'superadmin' && (
                 <button onClick={() => {
@@ -3524,13 +3887,13 @@ const Dashboard = () => {
                   setEditingItem(null);
                   setActiveModal('add-candidate');
                 }} className="btn-primary-sm">
-                  <Plus size={16} /> Add Candidate
+                  <Plus size={16} /> {tText("Add Candidate")}
                 </button>
               )}
             </div>
             
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              List of OSIS candidate pairs competing in the active election period.
+              {tText("List of OSIS candidate pairs competing in the active election period.")}
             </p>
 
             {/* Filter & Search Bar */}
@@ -3540,7 +3903,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Search candidate name, class, vision..." 
+                  placeholder={tText("Search candidate name, class, vision...")} 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={candidateSearch}
                   onChange={e => setCandidateSearch(e.target.value)}
@@ -3553,7 +3916,7 @@ const Dashboard = () => {
                 value={candidatePeriodFilter}
                 onChange={e => setCandidatePeriodFilter(e.target.value)}
               >
-                <option value="">All Periods</option>
+                <option value="">{tText("All Periods")}</option>
                 {periods.map(p => (
                   <option key={p.id} value={p.id}>{p.yearLabel}</option>
                 ))}
@@ -3576,18 +3939,18 @@ const Dashboard = () => {
                       <div style={{ flexGrow: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', paddingRight: userData.role === 'superadmin' ? '50px' : '0' }}>
                           <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', background: 'rgba(37,99,235,0.08)', color: 'var(--secondary-blue)', borderRadius: '6px' }}>
-                            PAIR {c.paslonNo}
+                            {tText("PAIR")} {c.paslonNo}
                           </span>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Period {periodLabel}
+                            {tText("Period")} {periodLabel}
                           </span>
                         </div>
                         <h3 style={{ margin: '0 0 4px', fontSize: '16px', color: 'var(--primary-navy)', fontWeight: 700 }}>{c.name}</h3>
                         <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{c.classes}</p>
                         
                         <div style={{ fontSize: '12px', borderTop: '1px solid var(--card-border)', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div><strong>Vision:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.visi}</span></div>
-                          {c.misi && <div><strong>Mission:</strong> <span style={{ color: 'var(--text-dark)' }}>{c.misi}</span></div>}
+                          <div><strong>{tText("Vision:")}</strong> <span style={{ color: 'var(--text-dark)' }}>{c.visi}</span></div>
+                          {c.misi && <div><strong>{tText("Mission:")}</strong> <span style={{ color: 'var(--text-dark)' }}>{c.misi}</span></div>}
                         </div>
     
                         {userData.role === 'superadmin' && (
@@ -3616,7 +3979,7 @@ const Dashboard = () => {
                 })}
                 {filteredCandidates.length === 0 && (
                   <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '40px', color: 'var(--text-muted)', width: '100%' }}>
-                    No candidate data matches your search.
+                    {tText("No candidate data matches your search.")}
                   </div>
                 )}
               </div>
@@ -3682,12 +4045,12 @@ const Dashboard = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                 <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                   <Briefcase size={20} color="var(--secondary-blue)" />
-                  OSIS Work Programs
+                  {tText("OSIS Work Programs")}
                 </h2>
                 
                 {/* Period Selector Dropdown */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Period:</span>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>{tText("Period:")}</span>
                   <select
                     className="form-input"
                     style={{ width: '140px', margin: 0, paddingLeft: '12px', paddingRight: '12px', paddingTop: 0, paddingBottom: 0, height: '36px', fontSize: '13px' }}
@@ -3715,7 +4078,7 @@ const Dashboard = () => {
                     className="btn-primary-sm"
                     style={{ padding: '8px 16px', height: '36px', display: 'flex', alignItems: 'center', gap: '6px' }}
                   >
-                    <Plus size={16} /> Add Program
+                    <Plus size={16} /> {tText("Add Program")}
                   </button>
                 )}
               </div>
@@ -3724,32 +4087,32 @@ const Dashboard = () => {
               {/* Proker Statistics */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
                 <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Programs</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{tText("Total Programs")}</span>
                   <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--primary-navy)' }}>{totalPro}</h4>
                 </div>
                 <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Planned</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{tText("Planned")}</span>
                   <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--text-muted)' }}>{rencanaPro}</h4>
                 </div>
                 <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>In Progress</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{tText("In Progress")}</span>
                   <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--warning)' }}>{berjalanPro}</h4>
                 </div>
                 <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Completed</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{tText("Completed")}</span>
                   <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--success)' }}>{selesaiPro}</h4>
                 </div>
               </div>
 
               {/* List of Prokers */}
               <h3 style={{ fontSize: '15px', color: 'var(--primary-navy)', fontWeight: 700, margin: '10px 0 0' }}>
-                OSIS Work Program Registry
+                {tText("OSIS Work Program Registry")}
               </h3>
 
               <div className="proker-timeline">
                 {sortedProkers.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)', border: '1px dashed var(--card-border)', borderRadius: '12px' }}>
-                    No work programs have been structured for this period yet.
+                    {tText("No work programs have been structured for this period yet.")}
                   </div>
                 ) : (
                   sortedProkers.map(p => {
@@ -3776,17 +4139,17 @@ const Dashboard = () => {
                             
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                Target: <strong>{p.targetDate}</strong>
+                                {tText("Target:")} <strong>{p.targetDate}</strong>
                               </span>
                               
                               {p.status === 'Rencana' && (
-                                <span className="badge badge-secondary" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px' }}>Planned</span>
+                                <span className="badge badge-secondary" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px' }}>{tText("Planned")}</span>
                               )}
                               {p.status === 'Berjalan' && (
-                                <span className="badge badge-warning" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--warning)' }}>In Progress</span>
+                                <span className="badge badge-warning" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--warning)' }}>{tText("In Progress")}</span>
                               )}
                               {p.status === 'Selesai' && (
-                                <span className="badge badge-success" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--success)' }}>Completed</span>
+                                <span className="badge badge-success" style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', color: 'var(--success)' }}>{tText("Completed")}</span>
                               )}
                             </div>
                           </div>
@@ -4483,21 +4846,21 @@ const Dashboard = () => {
                   onClick={() => navigate('/proker')} 
                   style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 600 }}
                 >
-                  <ArrowLeft size={16} /> Back
+                  <ArrowLeft size={16} /> {tText("Back")}
                 </button>
                 <div style={{ borderLeft: '1px solid var(--card-border)', height: '20px' }}></div>
                 <div>
                   <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--primary-navy)' }}>
                     {p.name}
                   </h2>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Target: {p.targetDate}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{tText("Target:")} {p.targetDate}</span>
                 </div>
               </div>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Program Status:</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>{tText("Program Status:")}</span>
                 <span className={`badge badge-${p.status === 'Selesai' ? 'success' : p.status === 'Berjalan' ? 'warning' : 'secondary'}`} style={{ color: p.status === 'Selesai' ? 'var(--success)' : p.status === 'Berjalan' ? 'var(--warning)' : 'var(--text-muted)', padding: '4px 10px', fontSize: '12px', borderRadius: '6px' }}>
-                  {p.status === 'Selesai' ? 'Completed' : p.status === 'Berjalan' ? 'In Progress' : 'Planned'}
+                  {p.status === 'Selesai' ? tText('Completed') : p.status === 'Berjalan' ? tText('In Progress') : tText('Planned')}
                 </span>
               </div>
             </div>
@@ -4524,7 +4887,7 @@ const Dashboard = () => {
                   }}
                 >
                   {tab.icon}
-                  {tab.label}
+                  {tText(tab.label)}
                 </button>
               ))}
             </div>
@@ -4534,27 +4897,27 @@ const Dashboard = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                     <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Proposals Submitted</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{tText("Proposals Submitted")}</span>
                       <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--secondary-blue)' }}>{subData.proposals?.length || 0}</h4>
                     </div>
                     <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Scheduled Meetings</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{tText("Scheduled Meetings")}</span>
                       <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--warning)' }}>{subData.meetings?.length || 0}</h4>
                     </div>
                     <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Committee Divisions</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{tText("Committee Divisions")}</span>
                       <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--primary-navy)' }}>{subData.divisions?.length || 0}</h4>
                     </div>
                     <div className="theme-card" style={{ padding: '16px', border: '1px solid var(--card-border)' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Member Count</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{tText("Member Count")}</span>
                       <h4 style={{ margin: '6px 0 0', fontSize: '20px', fontWeight: 800, color: 'var(--success)' }}>{subData.members?.length || 0}</h4>
                     </div>
                   </div>
 
                   <div className="theme-card" style={{ padding: '20px', border: '1px solid var(--card-border)', background: 'var(--bg-soft-white)' }}>
-                    <h3 style={{ fontSize: '15px', margin: '0 0 10px 0', color: 'var(--primary-navy)' }}>Activity Description</h3>
+                    <h3 style={{ fontSize: '15px', margin: '0 0 10px 0', color: 'var(--primary-navy)' }}>{tText("Activity Description")}</h3>
                     <p style={{ margin: 0, fontSize: '14px', lineHeight: '1.6', color: 'var(--text-dark)' }}>
-                      {p.description || 'No description added for this work program.'}
+                      {p.description || tText('No description added for this work program.')}
                     </p>
                   </div>
                 </div>
@@ -4579,7 +4942,7 @@ const Dashboard = () => {
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      Activity Proposal
+                      {tText("Activity Proposal")}
                     </button>
                     <button
                       type="button"
@@ -4596,7 +4959,7 @@ const Dashboard = () => {
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      LPJ Report
+                      {tText("LPJ Report")}
                     </button>
                   </div>
 
@@ -4604,23 +4967,35 @@ const Dashboard = () => {
                     <>
                       {isSecretaryUser && proposalScheduleInfo && !proposalScheduleInfo.isPastEvent && proposalScheduleInfo.isInNotifyWindow && (
                         <div style={{ padding: '16px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--warning)' }}>Secretary Notification</span>
+                          <span style={{ fontWeight: 700, color: 'var(--warning)' }}>{tText("Secretary Notification")}</span>
                           <span>
-                            Proposal for <strong>{p.name}</strong> will be open for submission 1 month prior to the event date.
+                            {lang === 'id' ? (
+                              <>Proposal untuk <strong>{p.name}</strong> akan dibuka untuk pengajuan 1 bulan sebelum tanggal acara.</>
+                            ) : (
+                              <>Proposal for <strong>{p.name}</strong> will be open for submission 1 month prior to the event date.</>
+                            )}
                           </span>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Time remaining to event: <strong>{proposalScheduleInfo.daysToEvent} days</strong>. Please prepare the document.
+                            {lang === 'id' ? (
+                              <>Sisa waktu ke acara: <strong>{proposalScheduleInfo.daysToEvent} hari</strong>. Harap persiapkan dokumen.</>
+                            ) : (
+                              <>Time remaining to event: <strong>{proposalScheduleInfo.daysToEvent} days</strong>. Please prepare the document.</>
+                            )}
                           </span>
                         </div>
                       )}
                       {isSecretaryUser && proposalScheduleInfo && proposalScheduleInfo.canSubmitProposal && (
                         <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.07)', border: '1px solid rgba(16, 185, 129, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--success)' }}>Proposal Submission Open</span>
+                          <span style={{ fontWeight: 700, color: 'var(--success)' }}>{tText("Proposal Submission Open")}</span>
                           <span>
-                            The 1-month preparation window has started for <strong>{p.name}</strong>.
+                            {lang === 'id' ? (
+                              <>Jendela persiapan 1 bulan telah dimulai untuk <strong>{p.name}</strong>.</>
+                            ) : (
+                              <>The 1-month preparation window has started for <strong>{p.name}</strong>.</>
+                            )}
                           </span>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Proposal must be submitted before the event starts.
+                            {tText("Proposal must be submitted before the event starts.")}
                           </span>
                         </div>
                       )}
@@ -4630,12 +5005,16 @@ const Dashboard = () => {
                           const activeProp = subData.proposals.find((x: any) => x.status === 'Diajukan' || x.status === 'Disetujui');
                           return (
                             <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                              <span style={{ fontWeight: 700, color: 'var(--success)' }}>✓ Active Proposal Found</span>
+                              <span style={{ fontWeight: 700, color: 'var(--success)' }}>{tText("✓ Active Proposal Found")}</span>
                               <span>
-                                Proposal titled <strong>"{activeProp.title}"</strong> is currently in <strong>{activeProp.status === 'Diajukan' ? 'Submitted' : 'Approved'}</strong> status.
+                                {lang === 'id' ? (
+                                  <>Proposal dengan judul <strong>"{activeProp.title}"</strong> saat ini dalam status <strong>{activeProp.status === 'Diajukan' ? 'Diajukan' : 'Disetujui'}</strong>.</>
+                                ) : (
+                                  <>Proposal titled <strong>"{activeProp.title}"</strong> is currently in <strong>{activeProp.status === 'Diajukan' ? 'Submitted' : 'Approved'}</strong> status.</>
+                                )}
                               </span>
                               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                You cannot submit a new proposal unless the active proposal is rejected by the Advisor/Superadmin.
+                                {tText("You cannot submit a new proposal unless the active proposal is rejected by the Advisor/Superadmin.")}
                               </span>
                             </div>
                           );
@@ -4658,14 +5037,14 @@ const Dashboard = () => {
                             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', width: '100%' }}>
                               <div style={{ flex: 1, minWidth: '250px' }}>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>
-                                  Proposal Title <span style={{ color: 'var(--danger)' }}>*</span>
+                                  {tText("Proposal Title")} <span style={{ color: 'var(--danger)' }}>*</span>
                                 </label>
                                 <input 
                                   name="title" 
                                   required 
                                   type="text" 
                                   className="form-input" 
-                                  placeholder="Enter proposal title..." 
+                                  placeholder={tText("Enter proposal title...")} 
                                   style={{ margin: 0 }} 
                                 />
                               </div>
@@ -4673,7 +5052,7 @@ const Dashboard = () => {
 
                             <div style={{ width: '100%' }}>
                               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-dark)' }}>
-                                Proposal File (PDF, DOCX, etc.) <span style={{ color: 'var(--danger)' }}>*</span>
+                                {tText("Proposal File (PDF, DOCX, etc.)")} <span style={{ color: 'var(--danger)' }}>*</span>
                               </label>
                               
                               <div
@@ -4724,16 +5103,16 @@ const Dashboard = () => {
                                       onClick={() => setSelectedProposalFile(null)}
                                       style={{ background: 'transparent', border: 'none', color: 'var(--danger)', fontWeight: 700, cursor: 'pointer', fontSize: '11px', padding: '4px' }}
                                     >
-                                      Replace
+                                      {tText("Replace")}
                                     </button>
                                   </div>
                                 ) : (
                                   <div>
                                     <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)' }}>
-                                      Drag & drop proposal file here, or click to browse
+                                      {tText("Drag & drop proposal file here, or click to browse")}
                                     </p>
                                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                      Recommended file size &lt; 1.5MB
+                                      {tText("Recommended file size")} &lt; 1.5MB
                                     </span>
                                   </div>
                                 )}
@@ -4747,7 +5126,7 @@ const Dashboard = () => {
                                 disabled={!!proposalScheduleInfo && !proposalScheduleInfo.canSubmitProposal}
                                 style={{ height: '38px', padding: '0 24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, opacity: proposalScheduleInfo && !proposalScheduleInfo.canSubmitProposal ? 0.6 : 1, cursor: proposalScheduleInfo && !proposalScheduleInfo.canSubmitProposal ? 'not-allowed' : 'pointer' }}
                               >
-                                <Plus size={16} /> Submit Proposal
+                                <Plus size={16} /> {tText("Submit Proposal")}
                               </button>
                             </div>
                           </form>
@@ -4758,18 +5137,18 @@ const Dashboard = () => {
                         <table className="admin-table">
                           <thead>
                             <tr>
-                              <th>Proposal Title</th>
-                              <th>Submission Date</th>
-                              <th>Document Link</th>
-                              <th>Status</th>
-                              {canModerateProkerDocs && <th style={{ textAlign: 'center', width: '150px' }}>Action</th>}
+                              <th>{tText("Proposal Title")}</th>
+                              <th>{tText("Submission Date")}</th>
+                              <th>{tText("Document Link")}</th>
+                              <th>{tText("Status")}</th>
+                              {canModerateProkerDocs && <th style={{ textAlign: 'center', width: '150px' }}>{tText("Action")}</th>}
                             </tr>
                           </thead>
                           <tbody>
                             {!subData.proposals || subData.proposals.length === 0 ? (
                               <tr>
                                 <td colSpan={canModerateProkerDocs ? 5 : 4} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                                  No proposals have been submitted yet.
+                                  {tText("No proposals have been submitted yet.")}
                                 </td>
                               </tr>
                             ) : (
@@ -4801,11 +5180,11 @@ const Dashboard = () => {
                                   <td>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                       <span className={`badge badge-${x.status === 'Disetujui' ? 'success' : x.status === 'Ditolak' ? 'danger' : 'warning'}`} style={{ width: 'fit-content', color: x.status === 'Disetujui' ? 'var(--success)' : x.status === 'Ditolak' ? 'var(--danger)' : 'var(--warning)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
-                                        {x.status === 'Disetujui' ? 'Approved' : x.status === 'Ditolak' ? 'Rejected' : 'Submitted'}
+                                        {x.status === 'Disetujui' ? tText('Approved') : x.status === 'Ditolak' ? tText('Rejected') : tText('Submitted')}
                                       </span>
                                       {x.status === 'Ditolak' && x.reason && (
                                         <span style={{ fontSize: '11px', color: 'var(--danger)', fontStyle: 'italic', maxWidth: '200px', whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                                          Reason: {x.reason}
+                                          {tText("Reason:")} {x.reason}
                                         </span>
                                       )}
                                     </div>
@@ -4853,17 +5232,17 @@ const Dashboard = () => {
                                         {x.status !== 'Ditolak' && (
                                           <button
                                             onClick={() => {
-                                              const reason = window.prompt('Enter rejection reason for this proposal:');
-                                              if (reason === null) return;
-                                              if (!reason.trim()) {
-                                                showToast('Rejection reason cannot be empty.', 'error');
-                                                return;
-                                              }
-                                              updateProkerSubData({
-                                                ...subData,
-                                                proposals: subData.proposals.map((p: any) => p.id === x.id ? { ...p, status: 'Ditolak', reason } : p)
+                                              setRejectionModal({
+                                                title: lang === 'id' ? 'Tolak Proposal' : 'Reject Proposal',
+                                                placeholder: lang === 'id' ? 'Masukkan alasan penolakan...' : 'Enter rejection reason...',
+                                                onConfirm: (reason) => {
+                                                  updateProkerSubData({
+                                                    ...subData,
+                                                    proposals: subData.proposals.map((p: any) => p.id === x.id ? { ...p, status: 'Ditolak', reason } : p)
+                                                  });
+                                                  showToast(lang === 'id' ? 'Proposal ditolak!' : 'Proposal rejected!');
+                                                }
                                               });
-                                              showToast('Proposal rejected!');
                                             }}
                                             style={{
                                               width: '24px',
@@ -4911,28 +5290,52 @@ const Dashboard = () => {
                       {reportScheduleInfo && !reportScheduleInfo.isBeforeEvent && !reportScheduleInfo.isPastDeadline && (
                         <div style={{ padding: '16px', background: reportScheduleInfo.canSubmitReport ? 'rgba(16, 185, 129, 0.07)' : 'rgba(245, 158, 11, 0.08)', border: reportScheduleInfo.canSubmitReport ? '1px solid rgba(16, 185, 129, 0.22)' : '1px solid rgba(245, 158, 11, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
                           <span style={{ fontWeight: 700, color: reportScheduleInfo.canSubmitReport ? 'var(--success)' : 'var(--warning)' }}>
-                            {reportScheduleInfo.canSubmitReport ? 'Report Submission Open' : 'Pending Report Timeline'}
+                            {reportScheduleInfo.canSubmitReport ? tText('Report Submission Open') : tText('Pending Report Timeline')}
                           </span>
                           <span>
-                            {reportScheduleInfo.canSubmitReport
-                              ? `LPJ report submission for ${p.name} is open and must be submitted before H+1 month.`
-                              : `LPJ report for ${p.name} will be open starting H+1 day after the event is finished.`}
+                            {reportScheduleInfo.canSubmitReport ? (
+                              lang === 'id' ? (
+                                <>Pengajuan laporan LPJ untuk <strong>{p.name}</strong> telah dibuka dan harus dikirimkan sebelum H+1 bulan.</>
+                              ) : (
+                                <>LPJ report submission for <strong>{p.name}</strong> is open and must be submitted before H+1 month.</>
+                              )
+                            ) : (
+                              lang === 'id' ? (
+                                <>Laporan LPJ untuk <strong>{p.name}</strong> akan dibuka mulai H+1 hari setelah acara selesai.</>
+                              ) : (
+                                <>LPJ report for <strong>{p.name}</strong> will be open starting H+1 day after the event is finished.</>
+                              )
+                            )}
                           </span>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            {reportScheduleInfo.canSubmitReport
-                              ? `Remaining time to deadline: ${reportScheduleInfo.daysUntilDeadline} days.`
-                              : `Time remaining to report opening: ${reportScheduleInfo.daysSinceEvent <= 0 ? 1 : reportScheduleInfo.daysSinceEvent} days.`}
+                            {reportScheduleInfo.canSubmitReport ? (
+                              lang === 'id' ? (
+                                <>Sisa waktu hingga batas akhir: <strong>{reportScheduleInfo.daysUntilDeadline} hari</strong>.</>
+                              ) : (
+                                <>Remaining time to deadline: <strong>{reportScheduleInfo.daysUntilDeadline} days</strong>.</>
+                              )
+                            ) : (
+                              lang === 'id' ? (
+                                <>Sisa waktu hingga pembukaan laporan: <strong>{reportScheduleInfo.daysSinceEvent <= 0 ? 1 : reportScheduleInfo.daysSinceEvent} hari</strong>.</>
+                              ) : (
+                                <>Time remaining to report opening: <strong>{reportScheduleInfo.daysSinceEvent <= 0 ? 1 : reportScheduleInfo.daysSinceEvent} days</strong>.</>
+                              )
+                            )}
                           </span>
                         </div>
                       )}
                       {reportScheduleInfo && reportScheduleInfo.isPastDeadline && (
                         <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.07)', border: '1px solid rgba(239, 68, 68, 0.22)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--danger)' }}>Report Deadline Passed</span>
+                          <span style={{ fontWeight: 700, color: 'var(--danger)' }}>{tText("Report Deadline Passed")}</span>
                           <span>
-                            LPJ report for <strong>{p.name}</strong> has passed the H+1 month deadline post-event.
+                            {lang === 'id' ? (
+                              <>Laporan LPJ untuk <strong>{p.name}</strong> telah melewati batas akhir H+1 bulan setelah acara.</>
+                            ) : (
+                              <>LPJ report for <strong>{p.name}</strong> has passed the H+1 month deadline post-event.</>
+                            )}
                           </span>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                            Report submissions are automatically locked after the deadline.
+                            {tText("Report submissions are automatically locked after the deadline.")}
                           </span>
                         </div>
                       )}
@@ -4942,12 +5345,16 @@ const Dashboard = () => {
                           const activeRep = subData.reports.find((x: any) => x.status === 'Diajukan' || x.status === 'Disetujui');
                           return (
                             <div style={{ padding: '16px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '4px', width: '100%', boxSizing: 'border-box' }}>
-                              <span style={{ fontWeight: 700, color: 'var(--success)' }}>✓ Active Report Found</span>
+                              <span style={{ fontWeight: 700, color: 'var(--success)' }}>{tText("✓ Active Report Found")}</span>
                               <span>
-                                Report titled <strong>"{activeRep.title}"</strong> is currently in <strong>{activeRep.status === 'Diajukan' ? 'Submitted' : 'Approved'}</strong> status.
+                                {lang === 'id' ? (
+                                  <>Laporan dengan judul <strong>"{activeRep.title}"</strong> saat ini dalam status <strong>{activeRep.status === 'Diajukan' ? 'Diajukan' : 'Disetujui'}</strong>.</>
+                                ) : (
+                                  <>Report titled <strong>"{activeRep.title}"</strong> is currently in <strong>{activeRep.status === 'Diajukan' ? 'Submitted' : 'Approved'}</strong> status.</>
+                                )}
                               </span>
                               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                                You cannot submit a new report unless the active report is rejected by the Advisor/Superadmin.
+                                {tText("You cannot submit a new report unless the active report is rejected by the Advisor/Superadmin.")}
                               </span>
                             </div>
                           );
@@ -4970,26 +5377,26 @@ const Dashboard = () => {
                             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', width: '100%' }}>
                               <div style={{ flex: 1, minWidth: '200px' }}>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>
-                                  Report Title (LPJ) <span style={{ color: 'var(--danger)' }}>*</span>
+                                  {tText("Report Title (LPJ)")} <span style={{ color: 'var(--danger)' }}>*</span>
                                 </label>
                                 <input 
                                   name="title" 
                                   required 
                                   type="text" 
                                   className="form-input" 
-                                  placeholder="MPLS LPJ Report..." 
+                                  placeholder={tText("MPLS LPJ Report...")} 
                                   style={{ margin: 0 }} 
                                 />
                               </div>
                               <div style={{ flex: 2, minWidth: '250px' }}>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: 'var(--text-dark)' }}>
-                                  Activity Results Summary
+                                  {tText("Activity Results Summary")}
                                 </label>
                                 <input 
                                   name="summary" 
                                   type="text" 
                                   className="form-input" 
-                                  placeholder="The event ran successfully with 95% committee attendance..." 
+                                  placeholder={tText("The event ran successfully with 95% committee attendance...")} 
                                   style={{ margin: 0 }} 
                                 />
                               </div>
@@ -4997,7 +5404,7 @@ const Dashboard = () => {
 
                             <div style={{ width: '100%' }}>
                               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-dark)' }}>
-                                LPJ Report File (PDF, DOCX, etc.) <span style={{ color: 'var(--danger)' }}>*</span>
+                                {tText("LPJ Report File (PDF, DOCX, etc.)")} <span style={{ color: 'var(--danger)' }}>*</span>
                               </label>
                               
                               <div
@@ -5048,16 +5455,16 @@ const Dashboard = () => {
                                       onClick={() => setSelectedReportFile(null)}
                                       style={{ background: 'transparent', border: 'none', color: 'var(--danger)', fontWeight: 700, cursor: 'pointer', fontSize: '11px', padding: '4px' }}
                                     >
-                                      Replace
+                                      {tText("Replace")}
                                     </button>
                                   </div>
                                 ) : (
                                   <div>
                                     <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-dark)' }}>
-                                      Drag & drop report file here, or click to browse
+                                      {tText("Drag & drop report file here, or click to browse")}
                                     </p>
                                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                                      Recommended file size &lt; 1.5MB
+                                      {tText("Recommended file size")} &lt; 1.5MB
                                     </span>
                                   </div>
                                 )}
@@ -5071,7 +5478,7 @@ const Dashboard = () => {
                                 disabled={!!reportScheduleInfo && !reportScheduleInfo.canSubmitReport}
                                 style={{ height: '38px', padding: '0 24px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, opacity: reportScheduleInfo && !reportScheduleInfo.canSubmitReport ? 0.6 : 1, cursor: reportScheduleInfo && !reportScheduleInfo.canSubmitReport ? 'not-allowed' : 'pointer' }}
                               >
-                                <Plus size={16} /> Submit Report
+                                <Plus size={16} /> {tText("Submit Report")}
                               </button>
                             </div>
                           </form>
@@ -5082,19 +5489,19 @@ const Dashboard = () => {
                         <table className="admin-table">
                           <thead>
                             <tr>
-                              <th>Report Title</th>
-                              <th>Results Summary</th>
-                              <th>Created Date</th>
-                              <th>Report Link</th>
-                              <th>Status</th>
-                              {canModerateProkerDocs && <th style={{ textAlign: 'center', width: '150px' }}>Action</th>}
+                              <th>{tText("Report Title")}</th>
+                              <th>{tText("Results Summary")}</th>
+                              <th>{tText("Created Date")}</th>
+                              <th>{tText("Report Link")}</th>
+                              <th>{tText("Status")}</th>
+                              {canModerateProkerDocs && <th style={{ textAlign: 'center', width: '150px' }}>{tText("Action")}</th>}
                             </tr>
                           </thead>
                           <tbody>
                             {!subData.reports || subData.reports.length === 0 ? (
                               <tr>
                                 <td colSpan={canModerateProkerDocs ? 6 : 5} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                                  No LPJ reports have been submitted yet.
+                                  {tText("No LPJ reports have been submitted yet.")}
                                 </td>
                               </tr>
                             ) : (
@@ -5127,11 +5534,11 @@ const Dashboard = () => {
                                   <td>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                       <span className={`badge badge-${x.status === 'Disetujui' ? 'success' : x.status === 'Ditolak' ? 'danger' : 'warning'}`} style={{ width: 'fit-content', color: x.status === 'Disetujui' ? 'var(--success)' : x.status === 'Ditolak' ? 'var(--danger)' : 'var(--warning)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
-                                        {x.status === 'Disetujui' ? 'Approved' : x.status === 'Ditolak' ? 'Rejected' : 'Submitted'}
+                                        {x.status === 'Disetujui' ? tText('Approved') : x.status === 'Ditolak' ? tText('Rejected') : tText('Submitted')}
                                       </span>
                                       {x.status === 'Ditolak' && x.reason && (
                                         <span style={{ fontSize: '11px', color: 'var(--danger)', fontStyle: 'italic', maxWidth: '200px', whiteSpace: 'normal', wordBreak: 'break-word' }}>
-                                          Reason: {x.reason}
+                                          {tText("Reason:")} {x.reason}
                                         </span>
                                       )}
                                     </div>
@@ -5179,17 +5586,17 @@ const Dashboard = () => {
                                         {x.status !== 'Ditolak' && (
                                           <button
                                             onClick={() => {
-                                              const reason = window.prompt('Enter rejection reason for this report:');
-                                              if (reason === null) return;
-                                              if (!reason.trim()) {
-                                                showToast('Rejection reason cannot be empty.', 'error');
-                                                return;
-                                              }
-                                              updateProkerSubData({
-                                                ...subData,
-                                                reports: subData.reports.map((p: any) => p.id === x.id ? { ...p, status: 'Ditolak', reason } : p)
+                                              setRejectionModal({
+                                                title: lang === 'id' ? 'Tolak Laporan' : 'Reject Report',
+                                                placeholder: lang === 'id' ? 'Masukkan alasan penolakan...' : 'Enter rejection reason...',
+                                                onConfirm: (reason) => {
+                                                  updateProkerSubData({
+                                                    ...subData,
+                                                    reports: subData.reports.map((p: any) => p.id === x.id ? { ...p, status: 'Ditolak', reason } : p)
+                                                  });
+                                                  showToast(lang === 'id' ? 'Laporan ditolak!' : 'Report rejected!');
+                                                }
                                               });
-                                              showToast('Report rejected!');
                                             }}
                                             style={{
                                               width: '24px',
@@ -6861,17 +7268,17 @@ const Dashboard = () => {
           <div className="theme-card profile-card" style={{ gridColumn: 'span 2' }}>
             <h2 className="profile-card-title">
               <Settings size={20} color="var(--secondary-blue)" />
-              Core System Settings
+              {tText("Core System Settings")}
             </h2>
             <form onSubmit={handleUpdateSystem} className="settings-form" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', textAlign: 'left' }}>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Application / System Name</label>
+                <label className="form-label">{tText("Application / System Name")}</label>
                 <input type="text" className="form-input" style={{ paddingLeft: '16px' }} value={sysName} onChange={e => setSysName(e.target.value)} required />
               </div>
 
               {/* Favicon Drag & Drop Zone */}
               <div className="form-group">
-                <label className="form-label">System Favicon (.ico, .png)</label>
+                <label className="form-label">{tText("System Favicon (.ico, .png)")}</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div
                     onDragEnter={handleDragFavicon}
@@ -6904,15 +7311,15 @@ const Dashboard = () => {
                     />
                     <Download size={20} color={faviconDragActive ? 'var(--secondary-blue)' : 'var(--text-muted)'} />
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dark)' }}>
-                      Drag & drop favicon, or click to upload
+                      {tText("Drag & drop favicon, or click to upload")}
                     </span>
                   </div>
                   {sysFavicon && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-soft-white)', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--card-border)' }}>
                       <img src={sysFavicon} alt="Favicon Preview" style={{ width: '32px', height: '32px', borderRadius: '4px', objectFit: 'cover' }} />
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Favicon Preview</span>
-                        <button type="button" onClick={() => setSysFavicon('')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 700 }}>Remove</button>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>{tText("Favicon Preview")}</span>
+                        <button type="button" onClick={() => setSysFavicon('')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 700 }}>{tText("Remove")}</button>
                       </div>
                     </div>
                   )}
@@ -6921,7 +7328,7 @@ const Dashboard = () => {
 
               {/* Logo Drag & Drop Zone */}
               <div className="form-group">
-                <label className="form-label">System Logo (.png, .jpg)</label>
+                <label className="form-label">{tText("System Logo (.png, .jpg)")}</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div
                     onDragEnter={handleDragLogo}
@@ -6954,15 +7361,15 @@ const Dashboard = () => {
                     />
                     <Download size={20} color={logoDragActive ? 'var(--secondary-blue)' : 'var(--text-muted)'} />
                     <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dark)' }}>
-                      Drag & drop logo, or click to upload
+                      {tText("Drag & drop logo, or click to upload")}
                     </span>
                   </div>
                   {sysLogo && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-soft-white)', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--card-border)' }}>
                       <img src={sysLogo} alt="Logo Preview" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover' }} />
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Logo Preview</span>
-                        <button type="button" onClick={() => setSysLogo('')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 700 }}>Remove</button>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>{tText("Logo Preview")}</span>
+                        <button type="button" onClick={() => setSysLogo('')} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontSize: '11px', cursor: 'pointer', padding: 0, textAlign: 'left', fontWeight: 700 }}>{tText("Remove")}</button>
                       </div>
                     </div>
                   )}
@@ -6970,16 +7377,16 @@ const Dashboard = () => {
               </div>
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">School / Institution Address</label>
+                <label className="form-label">{tText("School / Institution Address")}</label>
                 <input type="text" className="form-input" style={{ paddingLeft: '16px' }} value={sysAddress} onChange={e => setSysAddress(e.target.value)} />
               </div>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Contact / Technical Support</label>
+                <label className="form-label">{tText("Contact / Technical Support")}</label>
                 <input type="text" className="form-input" style={{ paddingLeft: '16px' }} value={sysContact} onChange={e => setSysContact(e.target.value)} />
               </div>
               <div style={{ gridColumn: 'span 2' }}>
                 <button type="submit" className="btn-primary-sm">
-                  <Save size={16} /> Save Settings
+                  <Save size={16} /> {tText("Save Settings")}
                 </button>
               </div>
             </form>
@@ -6992,44 +7399,50 @@ const Dashboard = () => {
           <div className="theme-card profile-card" style={{ gridColumn: 'span 2' }}>
             <h2 className="profile-card-title">
               <Database size={20} color="var(--secondary-blue)" />
-              Database Backup Management
+              {tText("Database Backup Management")}
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
               <div style={{ textAlign: 'left' }}>
-                <h3 style={{ margin: '0 0 12px', fontSize: '15px', color: 'var(--primary-navy)' }}>Database Security Status</h3>
+                <h3 style={{ margin: '0 0 12px', fontSize: '15px', color: 'var(--primary-navy)' }}>{tText("Database Security Status")}</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Connection Status</span>
-                    <span style={{ color: 'var(--success)', fontWeight: 700 }}>CONNECTED</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{tText("Connection Status")}</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 700 }}>{tText("CONNECTED")}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Database Engine</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{tText("Database Engine")}</span>
                     <span style={{ fontWeight: 600 }}>PostgreSQL 16</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Active Tables</span>
-                    <span style={{ fontWeight: 600 }}>10 Tables</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{tText("Active Tables")}</span>
+                    <span style={{ fontWeight: 600 }}>
+                      {lang === 'id' ? (
+                        <>10 Tabel</>
+                      ) : (
+                        <>10 Tables</>
+                      )}
+                    </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Database Size</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{tText("Database Size")}</span>
                     <span style={{ fontWeight: 600 }}>~24.5 KB</span>
                   </div>
                 </div>
                 <button onClick={triggerDatabaseBackup} className="btn-primary-sm" style={{ marginTop: '20px' }}>
-                  <Download size={16} /> Initiate Database Backup
+                  <Download size={16} /> {tText("Initiate Database Backup")}
                 </button>
               </div>
 
               <div>
-                <h3 style={{ margin: '0 0 12px', fontSize: '15px', color: 'var(--primary-navy)' }}>Backup Console</h3>
+                <h3 style={{ margin: '0 0 12px', fontSize: '15px', color: 'var(--primary-navy)' }}>{tText("Backup Console")}</h3>
                 <div style={{ background: 'var(--bg-soft-white)', border: '1px solid var(--card-border)', borderRadius: '8px', padding: '12px', height: '140px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '11px', color: 'var(--text-dark)', textAlign: 'left' }}>
                   {backupLogs.map((log, index) => <div key={index} style={{ marginBottom: '4px' }}>{log}</div>)}
-                  {backupLogs.length === 0 && <span style={{ color: 'var(--text-muted)' }}>Click the button to view progress logs.</span>}
+                  {backupLogs.length === 0 && <span style={{ color: 'var(--text-muted)' }}>{tText("Click the button to view progress logs.")}</span>}
                 </div>
                 {backupProgress !== null && (
                   <div style={{ marginTop: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                      <span>Backup Progress</span>
+                      <span>{tText("Backup Progress")}</span>
                       <span>{Math.round(backupProgress)}%</span>
                     </div>
                     <div style={{ width: '100%', height: '8px', background: 'var(--card-border)', borderRadius: '99px', overflow: 'hidden' }}>
@@ -7047,10 +7460,10 @@ const Dashboard = () => {
           <div className="theme-card profile-card animate-slideup" style={{ gridColumn: 'span 2' }}>
             <h2 className="profile-card-title">
               <UserIcon size={20} color="var(--secondary-blue)" />
-              Update Profile & Password
+              {lang === 'id' ? 'Perbarui Profil & Kata Sandi' : 'Update Profile & Password'}
             </h2>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px' }}>
-              Update your registered email address or change your account access password.
+              {lang === 'id' ? 'Perbarui alamat email terdaftar Anda atau ubah kata sandi akses akun Anda.' : 'Update your registered email address or change your account access password.'}
             </p>
             
             {editProfileError && (
@@ -7068,27 +7481,137 @@ const Dashboard = () => {
 
             <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px' }}>
               <div className="form-group" style={{ textAlign: 'left' }}>
-                <label className="form-label">Username (Cannot be modified)</label>
+                <label className="form-label">{lang === 'id' ? 'Nama Pengguna (Tidak dapat diubah)' : 'Username (Cannot be modified)'}</label>
                 <input type="text" className="form-input" style={{ paddingLeft: '16px', opacity: 0.6, cursor: 'not-allowed' }} value={userData?.username || ''} disabled />
               </div>
               <div className="form-group" style={{ textAlign: 'left' }}>
-                <label className="form-label">Email Address</label>
+                <label className="form-label">{lang === 'id' ? 'Alamat Email' : 'Email Address'}</label>
                 <input type="email" className="form-input" style={{ paddingLeft: '16px' }} value={editEmail} onChange={e => setEditEmail(e.target.value)} required />
               </div>
               <div className="form-group" style={{ textAlign: 'left' }}>
-                <label className="form-label">New Password (Leave blank to keep unchanged)</label>
-                <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Enter new password" value={editPassword} onChange={e => setEditPassword(e.target.value)} />
+                <label className="form-label">{lang === 'id' ? 'Kata Sandi Baru (Kosongkan jika tidak ingin diubah)' : 'New Password (Leave blank to keep unchanged)'}</label>
+                <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder={lang === 'id' ? 'Masukkan kata sandi baru' : 'Enter new password'} value={editPassword} onChange={e => setEditPassword(e.target.value)} />
               </div>
               <div className="form-group" style={{ textAlign: 'left' }}>
-                <label className="form-label">Confirm New Password</label>
-                <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder="Repeat new password" value={editConfirmPassword} onChange={e => setEditConfirmPassword(e.target.value)} />
+                <label className="form-label">{lang === 'id' ? 'Konfirmasi Kata Sandi Baru' : 'Confirm New Password'}</label>
+                <input type="password" className="form-input" style={{ paddingLeft: '16px' }} placeholder={lang === 'id' ? 'Ulangi kata sandi baru' : 'Repeat new password'} value={editConfirmPassword} onChange={e => setEditConfirmPassword(e.target.value)} />
               </div>
               <div>
                 <button type="submit" className="btn-primary-sm">
-                  <Save size={16} /> Save Changes
+                  <Save size={16} /> {lang === 'id' ? 'Simpan Perubahan' : 'Save Changes'}
                 </button>
               </div>
             </form>
+
+            {/* Preferences Section (Theme & Language) */}
+            <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--card-border)' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--primary-navy)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <Settings size={18} color="var(--secondary-blue)" />
+                {lang === 'id' ? 'Pengaturan Tampilan & Bahasa' : 'Appearance & Language Settings'}
+              </h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px' }}>
+                {/* Language Preference */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--card-border)', background: 'var(--bg-soft-white)' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-dark)' }}>
+                      {lang === 'id' ? 'Bahasa Aplikasi' : 'Application Language'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      {lang === 'id' ? 'Pilih bahasa tampilan antarmuka' : 'Choose the interface display language'}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', background: 'var(--card-bg)', padding: '4px', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
+                    <button 
+                      onClick={() => { if (lang !== 'id') toggleLanguage(); }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: lang === 'id' ? 'var(--secondary-blue)' : 'transparent',
+                        color: lang === 'id' ? '#ffffff' : 'var(--text-dark)',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      ID
+                    </button>
+                    <button 
+                      onClick={() => { if (lang !== 'en') toggleLanguage(); }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: lang === 'en' ? 'var(--secondary-blue)' : 'transparent',
+                        color: lang === 'en' ? '#ffffff' : 'var(--text-dark)',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      EN
+                    </button>
+                  </div>
+                </div>
+
+                {/* Theme Preference */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--card-border)', background: 'var(--bg-soft-white)' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-dark)' }}>
+                      {lang === 'id' ? 'Tema Tampilan' : 'Display Theme'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      {lang === 'id' ? 'Pilih antara mode terang dan gelap' : 'Switch between light and dark modes'}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', background: 'var(--card-bg)', padding: '4px', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
+                    <button 
+                      onClick={() => { if (theme !== 'light') toggleTheme(); }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: theme === 'light' ? 'var(--secondary-blue)' : 'transparent',
+                        color: theme === 'light' ? '#ffffff' : 'var(--text-dark)',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <Sun size={14} />
+                      {lang === 'id' ? 'Terang' : 'Light'}
+                    </button>
+                    <button 
+                      onClick={() => { if (theme !== 'dark') toggleTheme(); }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: theme === 'dark' ? 'var(--secondary-blue)' : 'transparent',
+                        color: theme === 'dark' ? '#ffffff' : 'var(--text-dark)',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <Moon size={14} />
+                      {lang === 'id' ? 'Gelap' : 'Dark'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         );
 
@@ -7097,7 +7620,7 @@ const Dashboard = () => {
           return (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: '300px' }}>
               <div className="spinner" style={{ width: '40px', height: '40px' }}></div>
-              <span style={{ marginLeft: '12px' }}>Loading cash finance data...</span>
+              <span style={{ marginLeft: '12px' }}>{tText("Loading cash finance data...")}</span>
             </div>
           );
         }
@@ -7116,10 +7639,10 @@ const Dashboard = () => {
             <div className="theme-card profile-card" style={{ gridColumn: 'span 2', textAlign: 'center', padding: '40px' }}>
               <ShieldAlert size={48} color="var(--warning)" style={{ marginBottom: '16px' }} />
               <h2 className="profile-card-title" style={{ borderBottom: 'none', justifyContent: 'center' }}>
-                No Active Period
+                {tText("No Active Period")}
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
-                There is currently no active OSIS management period. Please contact the Superadmin to activate a management period first in the <strong>Manage Period</strong> menu.
+                {tText("There is currently no active OSIS management period. Please contact the Superadmin to activate a management period first in the Manage Period menu.")}
               </p>
             </div>
           );
@@ -7147,7 +7670,10 @@ const Dashboard = () => {
         // Determine if user can edit/check payments
         const canEditKas = ['superadmin', 'treasurer', 'president', 'vice president'].includes(normalizedUserRole);
 
-        const monthNames = [
+        const monthNames = lang === 'id' ? [
+          'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+          'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        ] : [
           'January', 'February', 'March', 'April', 'May', 'June',
           'July', 'August', 'September', 'October', 'November', 'December'
         ];
@@ -7157,7 +7683,7 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
               <h2 className="profile-card-title" style={{ margin: 0, borderBottom: 'none', paddingBottom: 0 }}>
                 <Coins size={20} color="var(--secondary-blue)" />
-                OSIS Cash Management
+                {tText("OSIS Cash Management")}
               </h2>
               
               {/* Month Navigation Control */}
@@ -7210,12 +7736,16 @@ const Dashboard = () => {
               </div>
 
               <span style={{ fontSize: '14px', fontWeight: 600, padding: '6px 12px', borderRadius: '20px', background: 'rgba(37, 99, 235, 0.1)', color: 'var(--secondary-blue)' }}>
-                Active Period: {activePeriod.yearLabel}
+                {tText("Active Period:")} {activePeriod.yearLabel}
               </span>
             </div>
             
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px', flexShrink: 0 }}>
-              Manage OSIS cash payments per class for the active management period. Cash per class is calculated based on a rate of <strong>IDR 5,000 per registered student</strong>.
+              {lang === 'id' ? (
+                <>Kelola pembayaran kas OSIS per kelas untuk periode kepengurusan yang aktif. Kas per kelas dihitung berdasarkan tarif <strong>Rp 5.000 per siswa terdaftar</strong>.</>
+              ) : (
+                <>Manage OSIS cash payments per class for the active management period. Cash per class is calculated based on a rate of <strong>IDR 5,000 per registered student</strong>.</>
+              )}
             </p>
 
             {/* Metrics Dashboard Grid */}
@@ -7223,33 +7753,37 @@ const Dashboard = () => {
               
               {/* Metric 1 - Akumulasi Total */}
               <div className="theme-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(37, 99, 235, 0.02) 100%)', border: '1px solid rgba(37, 99, 235, 0.15)' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total OSIS Cash (Accumulated)</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{tText("Total OSIS Cash (Accumulated)")}</span>
                 <span style={{ fontSize: '24px', fontWeight: 700, color: 'var(--secondary-blue)' }}>
                   IDR {(kasData?.accumulatedTotal || 0).toLocaleString('en-US')}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
                   <Coins size={14} color="var(--secondary-blue)" />
-                  <span>Total cash collected across all months</span>
+                  <span>{tText("Total cash collected across all months")}</span>
                 </div>
               </div>
 
               {/* Metric 2 - Kas Bulan Ini (Terkumpul / Target) */}
               <div className="theme-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.02) 100%)', border: '1px solid rgba(245, 158, 11, 0.15)' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>This Month's Cash</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{tText("This Month's Cash")}</span>
                 <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--warning)', whiteSpace: 'nowrap' }}>
                   IDR {totalPaidAmount.toLocaleString('en-US')} / IDR {totalEstimatedAmount.toLocaleString('en-US')}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
                   <Building size={14} color="var(--warning)" />
-                  <span>Cash collected / target this month</span>
+                  <span>{tText("Cash collected / target this month")}</span>
                 </div>
               </div>
 
               {/* Metric 3 - Progress Kelas */}
               <div className="theme-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Paid Classes Progress</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{tText("Paid Classes Progress")}</span>
                 <span style={{ fontSize: '24px', fontWeight: 700, color: 'var(--success)' }}>
-                  {paidClassesCount} / {totalClassesCount} Classes
+                  {lang === 'id' ? (
+                    <>{paidClassesCount} / {totalClassesCount} Kelas</>
+                  ) : (
+                    <>{paidClassesCount} / {totalClassesCount} Classes</>
+                  )}
                 </span>
                 <div style={{ width: '100%', height: '6px', background: 'var(--card-border)', borderRadius: '99px', overflow: 'hidden', margin: '4px 0' }}>
                   <div style={{ width: `${totalClassesCount ? (paidClassesCount / totalClassesCount) * 100 : 0}%`, height: '100%', background: 'var(--success)', transition: 'width 0.3s ease' }}></div>
@@ -7265,7 +7799,7 @@ const Dashboard = () => {
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="Search class, grade, or major..." 
+                  placeholder={tText("Search class, grade, or major...")} 
                   style={{ paddingLeft: '40px', margin: 0 }}
                   value={adminSearch}
                   onChange={e => setAdminSearch(e.target.value)}
@@ -7274,7 +7808,7 @@ const Dashboard = () => {
               {!canEditKas && (
                 <div style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-soft-white)', padding: '8px 16px', borderRadius: '8px', color: 'var(--text-muted)' }}>
                   <ShieldAlert size={16} color="var(--warning)" />
-                  <span>Read-Only Mode. Only the Treasurer/OSIS Board members can confirm cash deposits.</span>
+                  <span>{tText("Read-Only Mode. Only the Treasurer/OSIS Board members can confirm cash deposits.")}</span>
                 </div>
               )}
             </div>
@@ -7284,20 +7818,20 @@ const Dashboard = () => {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '80px', textAlign: 'center' }}>Pay</th>
-                    <th>Class Name</th>
-                    <th>Major</th>
-                    <th style={{ textAlign: 'right' }}>Student Count</th>
-                    <th style={{ textAlign: 'right' }}>Required Deposit (IDR)</th>
-                    <th>Deposit Status</th>
-                    <th>Payment Date</th>
+                    <th style={{ width: '80px', textAlign: 'center' }}>{tText("Pay")}</th>
+                    <th>{tText("Class Name")}</th>
+                    <th>{tText("Major")}</th>
+                    <th style={{ textAlign: 'right' }}>{tText("Student Count")}</th>
+                    <th style={{ textAlign: 'right' }}>{tText("Required Deposit (IDR)")}</th>
+                    <th>{tText("Deposit Status")}</th>
+                    <th>{tText("Payment Date")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredKasClasses.length === 0 ? (
                     <tr>
                       <td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
-                        No class data matches your search.
+                        {tText("No class data matches your search.")}
                       </td>
                     </tr>
                   ) : (
@@ -7338,23 +7872,29 @@ const Dashboard = () => {
                         </td>
                         <td style={{ fontWeight: 600 }}>{cls.grade} - {cls.classname}</td>
                         <td>{cls.major} ({cls.majorCode})</td>
-                        <td style={{ textAlign: 'right', fontWeight: 500 }}>{cls.studentCount} students</td>
+                        <td style={{ textAlign: 'right', fontWeight: 500 }}>
+                          {lang === 'id' ? (
+                            <>{cls.studentCount} siswa</>
+                          ) : (
+                            <>{cls.studentCount} students</>
+                          )}
+                        </td>
                         <td style={{ textAlign: 'right', fontWeight: 600, color: cls.isPaid ? 'var(--success)' : 'var(--text-dark)' }}>
                           IDR {cls.requiredPayment.toLocaleString('en-US')}
                         </td>
                         <td>
                           {cls.isPaid ? (
                             <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)' }}>
-                              PAID
+                              {lang === 'id' ? 'LUNAS' : 'PAID'}
                             </span>
                           ) : (
                             <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)' }}>
-                              UNPAID
+                              {lang === 'id' ? 'BELUM BAYAR' : 'UNPAID'}
                             </span>
                           )}
                         </td>
                         <td style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-                          {cls.isPaid && cls.paidAt ? new Date(cls.paidAt).toLocaleDateString('en-US', {
+                          {cls.isPaid && cls.paidAt ? new Date(cls.paidAt).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US', {
                             day: 'numeric',
                             month: 'long',
                             year: 'numeric',
@@ -7694,81 +8234,62 @@ const Dashboard = () => {
               {systemSettings?.systemname || 'E-OSIS'}
             </span>
           </div>
-          <button 
-            onClick={toggleTheme} 
-            className="theme-toggle-btn" 
-            style={{ 
-              padding: '6px', 
-              borderRadius: '8px', 
-              cursor: 'pointer', 
-              background: 'transparent', 
-              border: '1px solid var(--card-border)', 
-              color: 'var(--text-dark)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              flexShrink: 0
-            }} 
-            aria-label="Toggle Theme"
-          >
-            {theme === 'light' ? <Moon size={14} /> : <Sun size={14} />}
-          </button>
         </div>
 
         {/* Scrollable menu content */}
         <div className="sidebar-scrollable-content" style={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', paddingRight: '4px', marginBottom: '16px' }}>
           {/* Menu Utama */}
           <div className="sidebar-menu-section" style={{ marginBottom: 0 }}>
-            <div className="sidebar-menu-title">Main Menu</div>
+            <div className="sidebar-menu-title">{t('mainMenu')}</div>
             <div className={`sidebar-item ${activeMenu === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('/dashboard')}>
-              <Grid size={16} /> Dashboard
+              <Grid size={16} /> {t('dashboard')}
             </div>
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('kandidat')) && (
               <div className={`sidebar-item ${activeMenu === 'kandidat' ? 'active' : ''}`} onClick={() => navigate('/candidates')}>
-                <Users size={16} /> OSIS Candidates
+                <Users size={16} /> {t('candidates')}
               </div>
             )}
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('proker')) && (
               <div className={`sidebar-item ${activeMenu === 'proker' ? 'active' : ''}`} onClick={() => navigate('/proker')}>
-                <Briefcase size={16} /> Work Programs
+                <Briefcase size={16} /> {t('proker')}
               </div>
             )}
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('organization')) && (
               <div className={`sidebar-item ${activeMenu === 'organization' ? 'active' : ''}`} onClick={() => navigate('/organization')}>
-                <UserIcon size={16} /> Organization Structure
+                <UserIcon size={16} /> {t('orgStructure')}
               </div>
             )}
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('kas')) && (
               <div className={`sidebar-item ${activeMenu === 'kas' ? 'active' : ''}`} onClick={() => navigate('/kas')}>
-                <Coins size={16} /> OSIS Cash
+                <Coins size={16} /> {t('osisCash')}
               </div>
             )}
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('evaluasi-kinerja')) && (
               <div className={`sidebar-item ${activeMenu === 'evaluasi-kinerja' ? 'active' : ''}`} onClick={() => navigate('/evaluasi-kinerja')}>
-                <TrendingUp size={16} /> Performance Evaluation
+                <TrendingUp size={16} /> {t('perfEval')}
               </div>
             )}
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('activity-log')) && (
               <div className={`sidebar-item ${activeMenu === 'activity-log' ? 'active' : ''}`} onClick={() => navigate('/activity-log')}>
-                <CheckSquare size={16} /> Activity Log
+                <CheckSquare size={16} /> {t('activityLog')}
               </div>
             )}
 
             {(userData.role === 'superadmin' || effectivePermissions.includes('recycle-bin')) && (
               <div className={`sidebar-item ${activeMenu === 'recycle-bin' ? 'active' : ''}`} onClick={() => navigate('/recycle-bin')}>
-                <Folder size={16} /> Recycle Bin
+                <Folder size={16} /> {t('recycleBin')}
               </div>
             )}
 
             {userData.role === 'superadmin' && (
               <div className={`sidebar-item ${activeMenu === 'permissions' ? 'active' : ''}`} onClick={() => navigate('/permissions')}>
-                <CheckSquare size={16} /> Permissions
+                <CheckSquare size={16} /> {t('permissions')}
               </div>
             )}
           </div>
@@ -7783,7 +8304,7 @@ const Dashboard = () => {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <Database size={16} />
-                  <span>Manage Data</span>
+                  <span>{t('manageData')}</span>
                 </div>
                 {isManageDataOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </div>
@@ -7791,37 +8312,37 @@ const Dashboard = () => {
                 <div>
                   {(userData.role === 'superadmin' || effectivePermissions.includes('manage-class')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-class' ? 'active' : ''}`} onClick={() => navigate('/manage-class')}>
-                      Manage Class
+                      {t('manageClass')}
                     </div>
                   )}
                   {(userData.role === 'superadmin' || effectivePermissions.includes('manage-grade')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-grade' ? 'active' : ''}`} onClick={() => navigate('/manage-grade')}>
-                      Manage Grade
+                      {t('manageGrade')}
                     </div>
                   )}
                   {(userData.role === 'superadmin' || effectivePermissions.includes('manage-major')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-major' ? 'active' : ''}`} onClick={() => navigate('/manage-major')}>
-                      Manage Major
+                      {t('manageMajor')}
                     </div>
                   )}
                   {(userData.role === 'superadmin' || effectivePermissions.includes('manage-period')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-period' ? 'active' : ''}`} onClick={() => navigate('/manage-period')}>
-                      Manage Period
+                      {t('managePeriod')}
                     </div>
                   )}
                   {(userData.role === 'superadmin' || effectivePermissions.includes('manage-user')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-user' ? 'active' : ''}`} onClick={() => navigate('/manage-user')}>
-                      Manage User
+                      {t('manageUser')}
                     </div>
                   )}
                   {(userData.role === 'superadmin' || effectivePermissions.includes('manage-role')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-role' ? 'active' : ''}`} onClick={() => navigate('/manage-role')}>
-                      Manage Role
+                      {t('manageRole')}
                     </div>
                   )}
                   {(userData.role === 'superadmin' || effectivePermissions.includes('manage-section')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'manage-section' ? 'active' : ''}`} onClick={() => navigate('/manage-section')}>
-                      Manage Section
+                      {t('manageSection')}
                     </div>
                   )}
                 </div>
@@ -7839,7 +8360,7 @@ const Dashboard = () => {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <Settings size={16} />
-                  <span>Settings</span>
+                  <span>{t('settings')}</span>
                 </div>
                 {isSettingsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </div>
@@ -7847,12 +8368,12 @@ const Dashboard = () => {
                 <div>
                   {(userData.role === 'superadmin' || effectivePermissions.includes('system-setting')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'system-setting' ? 'active' : ''}`} onClick={() => navigate('/system-setting')}>
-                      System Setting
+                      {t('systemSetting')}
                     </div>
                   )}
                   {(userData.role === 'superadmin' || effectivePermissions.includes('backup-db')) && (
                     <div className={`sidebar-item sidebar-item-sub ${activeMenu === 'backup-db' ? 'active' : ''}`} onClick={() => navigate('/backup-db')}>
-                      Backup Database
+                      {t('backupDb')}
                     </div>
                   )}
                 </div>
@@ -7875,7 +8396,7 @@ const Dashboard = () => {
               style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
             >
               <UserIcon size={16} />
-              <span>Account</span>
+              <span>{t('account')}</span>
             </div>
           </div>
         </div>
@@ -7884,7 +8405,7 @@ const Dashboard = () => {
         <div className="sidebar-menu-section" style={{ marginTop: 'auto', marginBottom: 0, paddingTop: '16px', borderTop: '1px solid var(--card-border)', flexShrink: 0 }}>
           <div className="sidebar-item" onClick={handleLogout} style={{ color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
             <LogOut size={16} />
-            <span>Logout</span>
+            <span>{t('logout')}</span>
           </div>
         </div>
       </div>
@@ -8631,6 +9152,67 @@ const Dashboard = () => {
                 }}
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectionModal && (
+        <div className="modal-backdrop" onClick={() => { setRejectionModal(null); setRejectionReason(''); }}>
+          <div className="modal-card animate-slideup" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">{rejectionModal.title}</h3>
+              <button className="modal-close-btn" onClick={() => { setRejectionModal(null); setRejectionReason(''); }}>&times;</button>
+            </div>
+            <div style={{ padding: '20px 24px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 600, color: 'var(--text-dark)' }}>
+                {lang === 'id' ? 'Alasan Penolakan:' : 'Rejection Reason:'}
+              </label>
+              <textarea
+                className="form-input"
+                style={{ 
+                  width: '100%', 
+                  minHeight: '100px', 
+                  padding: '12px', 
+                  borderRadius: '8px', 
+                  border: '1px solid var(--card-border)',
+                  fontSize: '13.5px',
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                  boxSizing: 'border-box'
+                }}
+                placeholder={rejectionModal.placeholder}
+                value={rejectionReason}
+                onChange={e => setRejectionReason(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="modal-actions" style={{ padding: '0 24px 24px', marginTop: 0 }}>
+              <button 
+                type="button" 
+                className="btn-secondary-sm" 
+                onClick={() => { setRejectionModal(null); setRejectionReason(''); }}
+              >
+                {lang === 'id' ? 'Batal' : 'Cancel'}
+              </button>
+              <button 
+                type="button" 
+                className="btn-primary-sm" 
+                style={{ background: 'var(--danger)', color: '#fff', border: 'none' }}
+                onClick={async () => {
+                  if (!rejectionReason.trim()) {
+                    showToast(lang === 'id' ? 'Alasan penolakan tidak boleh kosong.' : 'Rejection reason cannot be empty.', 'error');
+                    return;
+                  }
+                  const callback = rejectionModal.onConfirm;
+                  const reasonToSend = rejectionReason;
+                  setRejectionModal(null);
+                  setRejectionReason('');
+                  await callback(reasonToSend);
+                }}
+              >
+                {lang === 'id' ? 'Tolak' : 'Reject'}
               </button>
             </div>
           </div>

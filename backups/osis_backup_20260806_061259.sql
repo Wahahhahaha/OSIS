@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 8Hr3gsBPR37OgBMNqTWLilZpeLastMhXPU3Z8JOvcB6KdPqlnghvUdpr1gGD5Tr
+\restrict Mbs22L3P9fdHFr7JyfSpP2BN9spfIPzzVaCgCzl8gexMlZUNaNY7YBX7qFrZnbT
 
 -- Dumped from database version 16.14 (Debian 16.14-1.pgdg13+1)
 -- Dumped by pg_dump version 16.14 (Debian 16.14-1.pgdg13+1)
@@ -536,6 +536,7 @@ d43bb028-b604-4bea-bec1-374abc75c525	student	2026-08-05 05:15:24.338	::ffff:172.
 7db69297-c99c-4a01-b70d-473f98a31a14	student_2	2026-08-05 05:34:09.956	::ffff:172.18.0.1	1.123241247732115	104.0157225122199	Melakukan Login (/auth/login)
 984d6904-b8ef-49dc-b071-735cee34f029	student_2	2026-08-05 05:35:21.044	::ffff:172.18.0.1	1.123241247732115	104.0157225122199	Melakukan Voting untuk Kandidat ID: cand_1 (/admin/votes)
 671bd96a-20a5-4ea6-89d3-7b4a9215ee14	superadmin	2026-08-05 06:26:16.909	::ffff:172.18.0.1	1.123241247732115	104.0157225122199	Melakukan Login (/auth/login)
+df9ac15c-51f3-4166-a7ff-c6d2e095229e	superadmin	2026-08-05 11:46:34.849	::ffff:172.18.0.1	-6.2088	106.8456	Melakukan Login (/auth/login)
 \.
 
 
@@ -544,6 +545,7 @@ d43bb028-b604-4bea-bec1-374abc75c525	student	2026-08-05 05:15:24.338	::ffff:172.
 --
 
 COPY public.attendances (id, "meetingId", "orgMemberId", status, "createdAt", "updatedAt") FROM stdin;
+c19ba100-11c3-439c-af40-15019fa91b9c	meet-1	0a9ea676-b413-4193-b5ae-587bf10f8c56	PRESENT	2026-08-05 12:37:11.293	2026-08-05 12:37:11.293
 \.
 
 
@@ -582,6 +584,9 @@ f3ef9d28-fddb-46ca-9f70-8728ae96e583	A	47fc4f5e-afd5-40b4-8d59-264c353bd45c	e737
 --
 
 COPY public.divisions (id, name, "prokerId", "createdAt", "updatedAt") FROM stdin;
+div-1	Divisi Acara	62e01893-c008-468f-b158-3214672c4312	2026-08-05 12:37:11.28	2026-08-05 12:37:11.28
+div-2	Divisi Humas & Dokumentasi	62e01893-c008-468f-b158-3214672c4312	2026-08-05 12:37:11.28	2026-08-05 12:37:11.28
+div-3	Divisi Perlengkapan	62e01893-c008-468f-b158-3214672c4312	2026-08-05 12:37:11.28	2026-08-05 12:37:11.28
 \.
 
 
@@ -655,6 +660,7 @@ e737939c-abf9-4da3-9863-3677eb136772	Bisnis Daring Pemasaran	BDP	2026-07-28 18:5
 --
 
 COPY public.meetings (id, title, date, description, "prokerId", "createdAt", "updatedAt") FROM stdin;
+meet-1	Rapat Persiapan Awal	Juli 2026	Membahas konsep dan pembentukan panitia.	62e01893-c008-468f-b158-3214672c4312	2026-08-05 12:37:11.276	2026-08-05 12:37:11.276
 \.
 
 
@@ -1032,6 +1038,10 @@ b43cbc3d-bc0a-4cec-92b1-8dbe37af3ec8	2026/2027	ACTIVE	2026-07-27T07:00	2026-08-3
 --
 
 COPY public.proker_members (id, name, role, "divisionId", "prokerId", "createdAt", "updatedAt") FROM stdin;
+mem-1	Alif Rahman	Koordinator	div-1	62e01893-c008-468f-b158-3214672c4312	2026-08-05 12:37:11.287	2026-08-05 12:37:11.287
+mem-2	Clara Sinta	Anggota	div-1	62e01893-c008-468f-b158-3214672c4312	2026-08-05 12:37:11.287	2026-08-05 12:37:11.287
+mem-3	Rian Dwi	Koordinator	div-2	62e01893-c008-468f-b158-3214672c4312	2026-08-05 12:37:11.287	2026-08-05 12:37:11.287
+mem-4	Fadel Tri	Koordinator	div-3	62e01893-c008-468f-b158-3214672c4312	2026-08-05 12:37:11.287	2026-08-05 12:37:11.287
 \.
 
 
@@ -1081,6 +1091,7 @@ ec9af2af-bf85-490b-96ec-3a6c5f128cd7	Classmeet Kenaikan Kelas (Semester Genap)	K
 --
 
 COPY public.proposals (id, title, "fileUrl", "fileName", "fileSize", status, reason, "prokerId", "createdAt", "updatedAt") FROM stdin;
+prop-1	Proposal Kegiatan MPLS (Masa Pengenalan Lingkungan Sekolah)	https://docs.google.com/document/d/example	\N	\N	Diajukan	\N	62e01893-c008-468f-b158-3214672c4312	5/8/2026	2026-08-05 12:37:11.255
 \.
 
 
@@ -1776,5 +1787,5 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 8Hr3gsBPR37OgBMNqTWLilZpeLastMhXPU3Z8JOvcB6KdPqlnghvUdpr1gGD5Tr
+\unrestrict Mbs22L3P9fdHFr7JyfSpP2BN9spfIPzzVaCgCzl8gexMlZUNaNY7YBX7qFrZnbT
 
