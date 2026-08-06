@@ -83,6 +83,10 @@ export const authApi = {
     const response = await api.get<SystemResponse>('/system');
     return response.data;
   },
+  getPublicCandidates: async (): Promise<{ activePeriod: any; candidates: any[] }> => {
+    const response = await api.get('/public/candidates');
+    return response.data;
+  },
   updateSystemSettings: async (data: any): Promise<SystemResponse> => {
     const response = await api.post<SystemResponse>('/admin/system', data);
     return response.data;

@@ -46,6 +46,8 @@ import {
 import { authApi } from './api';
 import type { SystemResponse } from './api';
 import './App.css';
+import LandingPage from './LandingPage';
+
 
 // Helper to dynamically update browser favicon
 const updateFavicon = (url: string) => {
@@ -442,7 +444,7 @@ const Dashboard = () => {
   // Navigation for Admin
   const location = useLocation();
   const getActiveMenuFromPath = (path: string) => {
-    if (path === '/') return 'vote';
+    if (path === '/' || path === '/vote') return 'vote';
     if (path === '/dashboard') return 'dashboard';
     if (path === '/candidates' || path === '/kandidat') return 'kandidat';
     if (path === '/manage-class') return 'manage-class';
@@ -1002,13 +1004,9 @@ const Dashboard = () => {
     const isTeacher = userData.level === 'school' && userData.role === 'teacher';
     const isStudentNoRole = userData.level === 'student' && (!userData.role || userData.role === '-' || userData.role === 'members' || userData.role === 'student');
     
-    if (location.pathname === '/') {
-      if (!isTeacher && !isStudentNoRole) {
-        navigate('/dashboard', { replace: true });
-      }
-    } else if (location.pathname === '/dashboard') {
+    if (location.pathname === '/dashboard') {
       if (isTeacher || isStudentNoRole) {
-        navigate('/', { replace: true });
+        navigate('/vote', { replace: true });
       }
     }
   }, [userData, location.pathname, navigate]);
@@ -9853,12 +9851,14 @@ const Login = () => {
         const isTeacher = user.level === 'school' && user.role === 'teacher';
         const isStudentNoRole = user.level === 'student' && (!user.role || user.role === '-' || user.role === 'members' || user.role === 'student');
         if (isTeacher || isStudentNoRole) {
-          navigate('/', { replace: true });
+          navigate('/vote', { replace: true });
         } else {
           navigate('/dashboard', { replace: true });
         }
       } catch (err) {
-        navigate('/', { replace: true });
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login', { replace: true });
       }
       return;
     }
@@ -9899,7 +9899,7 @@ const Login = () => {
       const isStudentNoRole = user.level === 'student' && (!user.role || user.role === '-' || user.role === 'members' || user.role === 'student');
       
       if (isTeacher || isStudentNoRole) {
-        navigate('/', { replace: true });
+        navigate('/vote', { replace: true });
       } else {
         navigate('/dashboard', { replace: true });
       }
@@ -10044,6 +10044,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/error" element={<ErrorPage />} />
         <Route 

@@ -122,6 +122,43 @@ export class AppController {
     return system;
   }
 
+  @Get('public/candidates')
+  async getPublicCandidates() {
+    const activePeriod = await this.prisma.period.findFirst({
+      where: {
+        OR: [
+          { status: 'ACTIVE' },
+          { status: 'active' }
+        ]
+      }
+    });
+
+    if (!activePeriod) {
+      const candidates = await this.prisma.candidate.findMany({
+        orderBy: { paslonNo: 'asc' }
+      });
+      return {
+        activePeriod: null,
+        candidates
+      };
+    }
+
+    const candidates = await this.prisma.candidate.findMany({
+      where: {
+        periodId: activePeriod.id
+      },
+      orderBy: {
+        paslonNo: 'asc'
+      }
+    });
+
+    return {
+      activePeriod,
+      candidates
+    };
+  }
+
+
   @Post('admin/system')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('superadmin')
