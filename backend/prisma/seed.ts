@@ -198,6 +198,7 @@ async function main() {
     const voteStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
     const voteEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2);
 
+    const resultRelease = new Date(voteEnd.getTime() + 24 * 60 * 60 * 1000);
     const period = await prisma.period.upsert({
       where: { yearLabel: p.yearLabel },
       update: { status: p.status },
@@ -206,6 +207,9 @@ async function main() {
         status: p.status,
         voteStartDate: voteStart.toISOString(),
         voteEndDate: voteEnd.toISOString(),
+        resultReleaseType: 'H1',
+        resultReleaseDelay: 24,
+        resultReleaseDate: resultRelease.toISOString(),
       },
     });
     seededPeriods[p.yearLabel] = period;

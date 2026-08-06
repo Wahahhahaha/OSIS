@@ -798,6 +798,9 @@ const Dashboard = () => {
   const [newPeriodStatus, setNewPeriodStatus] = useState('ACTIVE');
   const [newPeriodVoteStart, setNewPeriodVoteStart] = useState('');
   const [newPeriodVoteEnd, setNewPeriodVoteEnd] = useState('');
+  const [newPeriodReleaseType, setNewPeriodReleaseType] = useState('H1');
+  const [newPeriodReleaseDelay, setNewPeriodReleaseDelay] = useState(24);
+  const [newPeriodReleaseDate, setNewPeriodReleaseDate] = useState('');
 
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -1810,12 +1813,18 @@ const Dashboard = () => {
         yearLabel: newPeriodYear,
         status: newPeriodStatus,
         voteStartDate: newPeriodVoteStart,
-        voteEndDate: newPeriodVoteEnd
+        voteEndDate: newPeriodVoteEnd,
+        resultReleaseType: newPeriodReleaseType,
+        resultReleaseDelay: newPeriodReleaseDelay,
+        resultReleaseDate: newPeriodReleaseType === 'CUSTOM' ? newPeriodReleaseDate : undefined
       });
       setNewPeriodYear('');
       setNewPeriodStatus('ACTIVE');
       setNewPeriodVoteStart('');
       setNewPeriodVoteEnd('');
+      setNewPeriodReleaseType('H1');
+      setNewPeriodReleaseDelay(24);
+      setNewPeriodReleaseDate('');
       setActiveModal(null);
       loadPeriodsData();
       showToast('OSIS period added successfully!');
@@ -1893,12 +1902,18 @@ const Dashboard = () => {
         yearLabel: newPeriodYear,
         status: newPeriodStatus,
         voteStartDate: newPeriodVoteStart,
-        voteEndDate: newPeriodVoteEnd
+        voteEndDate: newPeriodVoteEnd,
+        resultReleaseType: newPeriodReleaseType,
+        resultReleaseDelay: newPeriodReleaseDelay,
+        resultReleaseDate: newPeriodReleaseType === 'CUSTOM' ? newPeriodReleaseDate : undefined
       });
       setNewPeriodYear('');
       setNewPeriodStatus('ACTIVE');
       setNewPeriodVoteStart('');
       setNewPeriodVoteEnd('');
+      setNewPeriodReleaseType('H1');
+      setNewPeriodReleaseDelay(24);
+      setNewPeriodReleaseDate('');
       setEditingItem(null);
       setActiveModal(null);
       loadPeriodsData();
@@ -3534,7 +3549,7 @@ const Dashboard = () => {
         const start = activePeriod?.voteStartDate ? new Date(activePeriod.voteStartDate) : null;
         const end = activePeriod?.voteEndDate ? new Date(activePeriod.voteEndDate) : null;
 
-        const resultReleaseTime = end ? new Date(end.getTime() + 24 * 60 * 60 * 1000) : null;
+        const resultReleaseTime = activePeriod?.resultReleaseDate ? new Date(activePeriod.resultReleaseDate) : (end ? new Date(end.getTime() + 24 * 60 * 60 * 1000) : null);
         const isResultReleased = resultReleaseTime ? now >= resultReleaseTime : false;
 
         let votingStatus = 'open';
@@ -6610,13 +6625,16 @@ const Dashboard = () => {
                 setNewPeriodStatus('ACTIVE');
                 setNewPeriodVoteStart('');
                 setNewPeriodVoteEnd('');
+                setNewPeriodReleaseType('H1');
+                setNewPeriodReleaseDelay(24);
+                setNewPeriodReleaseDate('');
                 setActiveModal('add-period');
               }} className="btn-primary-sm">
                 <Plus size={16} /> Add Period
               </button>
             </div>
             <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px', flexShrink: 0 }}>
-              Configure active academic years for OSIS periods and define duration timelines for e-voting execution.
+               Configure active academic years for OSIS periods and define duration timelines for e-voting execution.
             </p>
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
@@ -6641,6 +6659,7 @@ const Dashboard = () => {
                     <th>Status</th>
                     <th>Voting Start</th>
                     <th>Voting End</th>
+                    <th>Result Announcement</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -6650,11 +6669,18 @@ const Dashboard = () => {
                       <td style={{ fontWeight: 600 }}>{p.yearLabel}</td>
                       <td>
                         <span className={`badge ${p.status === 'ACTIVE' ? 'badge-student' : p.status === 'INACTIVE' ? 'badge-school' : 'badge-employer'}`}>
-                          {p.status}
+                           {p.status}
                         </span>
                       </td>
                       <td style={{ fontSize: '13px' }}>{formatDatetime(p.voteStartDate)}</td>
                       <td style={{ fontSize: '13px' }}>{formatDatetime(p.voteEndDate)}</td>
+                      <td style={{ fontSize: '13px' }}>
+                        {p.resultReleaseDate 
+                          ? formatDatetime(p.resultReleaseDate) 
+                          : (p.voteEndDate 
+                              ? formatDatetime(new Date(new Date(p.voteEndDate).getTime() + 24 * 60 * 60 * 1000).toISOString()) 
+                              : '-')}
+                      </td>
                       <td>
                         <button onClick={() => {
                           setEditingItem(p);
@@ -6662,6 +6688,9 @@ const Dashboard = () => {
                           setNewPeriodStatus(p.status);
                           setNewPeriodVoteStart(formatForDateTimeLocal(p.voteStartDate));
                           setNewPeriodVoteEnd(formatForDateTimeLocal(p.voteEndDate));
+                          setNewPeriodReleaseType(p.resultReleaseType || 'H1');
+                          setNewPeriodReleaseDelay(p.resultReleaseDelay !== undefined ? p.resultReleaseDelay : 24);
+                          setNewPeriodReleaseDate(p.resultReleaseDate ? formatForDateTimeLocal(p.resultReleaseDate) : '');
                           setActiveModal('edit-period');
                         }} className="action-btn">
                           <Edit2 size={13} /> Edit
@@ -6671,7 +6700,7 @@ const Dashboard = () => {
                   ))}
                   {filteredPeriods.length === 0 && (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No period data available.</td>
+                      <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No period data available.</td>
                     </tr>
                   )}
                 </tbody>
@@ -8579,6 +8608,48 @@ const Dashboard = () => {
                     required 
                   />
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Result Announcement (Pengumuman Hasil)</label>
+                  <select 
+                    className="form-input" 
+                    style={{ paddingLeft: '16px' }} 
+                    value={newPeriodReleaseType} 
+                    onChange={e => setNewPeriodReleaseType(e.target.value)} 
+                    required
+                  >
+                    <option value="IMMEDIATELY">Sesaat setelah voting berakhir (Immediately)</option>
+                    <option value="H1">H+1 setelah voting berakhir (24 jam)</option>
+                    <option value="HOURS">Custom jam setelah voting berakhir</option>
+                    <option value="CUSTOM">Custom Tanggal & Waktu (Specific Datetime)</option>
+                  </select>
+                </div>
+                {newPeriodReleaseType === 'HOURS' && (
+                  <div className="form-group">
+                    <label className="form-label">Delay Pengumuman (Jam setelah voting berakhir)</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      style={{ paddingLeft: '16px' }} 
+                      min="0"
+                      value={newPeriodReleaseDelay} 
+                      onChange={e => setNewPeriodReleaseDelay(Number(e.target.value))} 
+                      required 
+                    />
+                  </div>
+                )}
+                {newPeriodReleaseType === 'CUSTOM' && (
+                  <div className="form-group">
+                    <label className="form-label">Waktu Pengumuman Hasil</label>
+                    <input 
+                      type="datetime-local" 
+                      className="form-input" 
+                      style={{ paddingLeft: '16px' }} 
+                      value={newPeriodReleaseDate} 
+                      onChange={e => setNewPeriodReleaseDate(e.target.value)} 
+                      required 
+                    />
+                  </div>
+                )}
                 <div className="modal-actions">
                   <button type="button" className="btn-secondary-sm" onClick={() => { setActiveModal(null); setEditingItem(null); }}>Cancel</button>
                   <button type="submit" className="btn-primary-sm">Save</button>

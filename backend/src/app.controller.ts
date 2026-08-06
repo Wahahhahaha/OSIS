@@ -657,12 +657,39 @@ export class AppController {
         data: { status: 'INACTIVE' }
       });
     }
+    let calculatedReleaseDate = body.resultReleaseDate || null;
+    const releaseType = body.resultReleaseType || 'H1';
+    const releaseDelay = body.resultReleaseDelay !== undefined ? Number(body.resultReleaseDelay) : 24;
+
+    if (body.voteEndDate) {
+      if (releaseType === 'IMMEDIATELY') {
+        calculatedReleaseDate = body.voteEndDate;
+      } else if (releaseType === 'H1') {
+        const endDate = new Date(body.voteEndDate);
+        if (!isNaN(endDate.getTime())) {
+          const releaseDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          calculatedReleaseDate = `${releaseDate.getFullYear()}-${pad(releaseDate.getMonth() + 1)}-${pad(releaseDate.getDate())}T${pad(releaseDate.getHours())}:${pad(releaseDate.getMinutes())}`;
+        }
+      } else if (releaseType === 'HOURS') {
+        const endDate = new Date(body.voteEndDate);
+        if (!isNaN(endDate.getTime())) {
+          const releaseDate = new Date(endDate.getTime() + releaseDelay * 60 * 60 * 1000);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          calculatedReleaseDate = `${releaseDate.getFullYear()}-${pad(releaseDate.getMonth() + 1)}-${pad(releaseDate.getDate())}T${pad(releaseDate.getHours())}:${pad(releaseDate.getMinutes())}`;
+        }
+      }
+    }
+
     const period = await this.prisma.period.create({
       data: {
         yearLabel: body.yearLabel,
         status: body.status,
         voteStartDate: body.voteStartDate || null,
-        voteEndDate: body.voteEndDate || null
+        voteEndDate: body.voteEndDate || null,
+        resultReleaseType: releaseType,
+        resultReleaseDelay: releaseDelay,
+        resultReleaseDate: calculatedReleaseDate
       }
     });
 
@@ -764,6 +791,30 @@ export class AppController {
       }
     }
 
+    let calculatedReleaseDate = body.resultReleaseDate || null;
+    const releaseType = body.resultReleaseType || 'H1';
+    const releaseDelay = body.resultReleaseDelay !== undefined ? Number(body.resultReleaseDelay) : 24;
+
+    if (body.voteEndDate) {
+      if (releaseType === 'IMMEDIATELY') {
+        calculatedReleaseDate = body.voteEndDate;
+      } else if (releaseType === 'H1') {
+        const endDate = new Date(body.voteEndDate);
+        if (!isNaN(endDate.getTime())) {
+          const releaseDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          calculatedReleaseDate = `${releaseDate.getFullYear()}-${pad(releaseDate.getMonth() + 1)}-${pad(releaseDate.getDate())}T${pad(releaseDate.getHours())}:${pad(releaseDate.getMinutes())}`;
+        }
+      } else if (releaseType === 'HOURS') {
+        const endDate = new Date(body.voteEndDate);
+        if (!isNaN(endDate.getTime())) {
+          const releaseDate = new Date(endDate.getTime() + releaseDelay * 60 * 60 * 1000);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          calculatedReleaseDate = `${releaseDate.getFullYear()}-${pad(releaseDate.getMonth() + 1)}-${pad(releaseDate.getDate())}T${pad(releaseDate.getHours())}:${pad(releaseDate.getMinutes())}`;
+        }
+      }
+    }
+
     return this.prisma.period.update({
       where: { id },
       data: {
@@ -771,6 +822,9 @@ export class AppController {
         status: body.status,
         voteStartDate: body.voteStartDate || null,
         voteEndDate: body.voteEndDate || null,
+        resultReleaseType: releaseType,
+        resultReleaseDelay: releaseDelay,
+        resultReleaseDate: calculatedReleaseDate,
         electedCandidateId
       }
     });

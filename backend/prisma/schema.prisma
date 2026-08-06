@@ -167,6 +167,9 @@ model Period {
   status              String
   voteStartDate       String?
   voteEndDate         String?
+  resultReleaseType   String?              @default("H1")
+  resultReleaseDelay  Int?                 @default(24)
+  resultReleaseDate   String?
   electedCandidateId  String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
